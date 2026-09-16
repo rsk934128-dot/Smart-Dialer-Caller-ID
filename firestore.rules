@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUser(data, userId) {
+      return data.uid == userId &&
+        data.email is string && data.email.size() <= 256;
+    }
+
+    function isValidContact(data, userId) {
+      return data.userId == userId &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.phone is string && data.phone.size() > 0 && data.phone.size() <= 50;
+    }
+
+    function isValidCallLog(data, userId) {
+      return data.userId == userId &&
+        data.id is string && data.id.size() <= 128 &&
+        data.phone is string && data.phone.size() > 0 && data.phone.size() <= 50 &&
+        data.type in ['incoming', 'outgoing', 'missed', 'blocked', 'rejected'] &&
+        data.timestamp is string && data.timestamp.size() <= 64;
+    }
+
+    function isValidBlockedNumber(data, userId) {
+      return data.userId == userId &&
+        data.id is string && data.id.size() <= 128 &&
+        data.phone is string && data.phone.size() > 0 && data.phone.size() <= 50;
+    }
+
+    // User Profile Document
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidUser(request.resource.data, userId);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data, userId);
+      allow delete: if false;
+
+      // User Contacts Subcollection
+      match /contacts/{contactId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidContact(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidContact(request.resource.data, userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // User Call Logs Subcollection
+      match /call_logs/{callLogId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidCallLog(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidCallLog(request.resource.data, userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // User Blocked Numbers Subcollection
+      match /blocked_numbers/{blockedId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidBlockedNumber(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidBlockedNumber(request.resource.data, userId);
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}

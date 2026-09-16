@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 512 },
+        "language": { "type": "string", "maxLength": 10 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email"]
+    },
+    "UserContact": {
+      "title": "UserContact",
+      "description": "A contact stored by the authenticated user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 256 },
+        "category": { "type": "string", "maxLength": 50 },
+        "isFavorite": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "spamReports": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "name", "phone"]
+    },
+    "UserCallLog": {
+      "title": "UserCallLog",
+      "description": "A call log entry belonging to the authenticated user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "name": { "type": "string", "maxLength": 100 },
+        "type": { "type": "string", "enum": ["incoming", "outgoing", "missed", "blocked", "rejected"] },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "duration": { "type": "number" },
+        "isSpam": { "type": "boolean" },
+        "spamScore": { "type": "number" },
+        "spamCategory": { "type": "string", "maxLength": 100 },
+        "simSlot": { "type": "number" },
+        "isRecorded": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "phone", "type", "timestamp"]
+    },
+    "UserBlockedNumber": {
+      "title": "UserBlockedNumber",
+      "description": "A blocked telephone number",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "name": { "type": "string", "maxLength": 100 },
+        "blockedAt": { "type": "string", "maxLength": 64 },
+        "reason": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["id", "userId", "phone"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile information"
+    },
+    "/users/{userId}/contacts/{contactId}": {
+      "schema": "UserContact",
+      "description": "User's personal contacts synchronized to cloud"
+    },
+    "/users/{userId}/call_logs/{callLogId}": {
+      "schema": "UserCallLog",
+      "description": "User's call logs synchronized to cloud"
+    },
+    "/users/{userId}/blocked_numbers/{blockedId}": {
+      "schema": "UserBlockedNumber",
+      "description": "User's blocked phone numbers"
+    }
+  }
+}
