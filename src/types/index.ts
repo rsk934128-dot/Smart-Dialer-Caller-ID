@@ -9,6 +9,8 @@ export interface Contact {
   isFavorite: boolean;
   company?: string;
   tag?: string;
+  storageLocation?: 'device' | 'sim1' | 'sim2';
+  simSlot?: 1 | 2;
 }
 
 export type CallType = 'incoming' | 'outgoing' | 'missed' | 'rejected';
@@ -66,7 +68,37 @@ export interface DialerSettings {
   simSlot: 1 | 2;
 }
 
-export type AppTab = 'keypad' | 'recents' | 'contacts' | 'callerid' | 'stats' | 'android-guide';
+export type AppTab = 'keypad' | 'recents' | 'contacts' | 'messages' | 'callerid' | 'stats' | 'android-guide';
+
+export type SmsType = 'inbox' | 'sent' | 'draft' | 'failed';
+export type SmsStatus = 'received' | 'read' | 'delivered' | 'sending' | 'failed';
+
+export interface SmsMessage {
+  id: string;
+  senderPhone: string;
+  senderName?: string;
+  recipientPhone: string;
+  recipientName?: string;
+  body: string;
+  timestamp: number;
+  type: SmsType;
+  status: SmsStatus;
+  simSlot: 1 | 2;
+  isOtp?: boolean;
+  otpCode?: string;
+  isSpam?: boolean;
+  isOfflineStored?: boolean;
+}
+
+export interface SmsThread {
+  threadId: string;
+  contactPhone: string;
+  contactName?: string;
+  simSlot: 1 | 2;
+  lastMessage: SmsMessage;
+  unreadCount: number;
+  totalMessages: number;
+}
 
 export interface SpamEntity {
   phone: string;
@@ -85,6 +117,7 @@ export interface RoomDbMetrics {
   callLogsCount: number;
   spamCount: number;
   callerIdCacheCount: number;
+  messagesCount?: number;
   isInitialized: boolean;
   lastLookupTimeMs?: number;
 }

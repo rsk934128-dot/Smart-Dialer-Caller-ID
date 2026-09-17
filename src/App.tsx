@@ -7,6 +7,7 @@ import {
   BookOpen,
   Phone,
   BarChart3,
+  MessageSquare,
 } from 'lucide-react';
 import {
   Contact,
@@ -40,6 +41,12 @@ import { ActiveCallModal } from './components/ActiveCallModal';
 import { FloatingCallerIdOverlay } from './components/FloatingCallerIdOverlay';
 import { AuthModal } from './components/AuthModal';
 import { cloudSyncService, CloudSyncStatus } from './services/cloudSyncService';
+import { DefaultCallPermissionModal } from './components/DefaultCallPermissionModal';
+import { DefaultCallPermissionBanner } from './components/DefaultCallPermissionBanner';
+import { MessagesView } from './components/MessagesView';
+import { IncomingSmsBanner } from './components/IncomingSmsBanner';
+import { callPermissionService } from './services/callPermissionService';
+import { smsService } from './services/smsService';
 
 export default function App() {
   // Localization
@@ -53,8 +60,35 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>(() => cloudSyncService.getStatus());
 
+  // Default Call App Permissions State
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState<boolean>(false);
+  const [isDefaultDialer, setIsDefaultDialer] = useState<boolean>(() => callPermissionService.isDefault());
+  const [realCallToast, setRealCallToast] = useState<{ show: boolean; phone: string; name?: string } | null>(null);
+
   // Tab State
   const [activeTab, setActiveTab] = useState<AppTab>('keypad');
+
+  // SMS State
+  const [activeSmsThreadPhone, setActiveSmsThreadPhone] = useState<string | null>(null);
+  const [unreadSmsCount, setUnreadSmsCount] = useState<number>(0);
+
+  useEffect(() => {
+    const updateUnread = async () => {
+      try {
+        const count = await roomDbService.messages.getUnreadCount();
+        setUnreadSmsCount(count);
+      } catch (e) {
+        console.error('Failed to get unread SMS count', e);
+      }
+    };
+    updateUnread();
+    const unsub = smsService.onIncomingSms(() => {
+      updateUnread();
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
 
   // Persistence State
   const [contacts, setContacts] = useState<Contact[]>(() => {
@@ -94,8 +128,6 @@ export default function App() {
     const saved = localStorage.getItem('smart_dialer_sound');
     return saved !== null ? saved === 'true' : true;
   });
-
-  const [isDefaultDialer, setIsDefaultDialer] = useState<boolean>(true);
 
   // Active Calling State
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
@@ -176,6 +208,16 @@ export default function App() {
     };
   }, []);
 
+  // Subscribe to Default Call Permissions
+  useEffect(() => {
+    const unsubPerms = callPermissionService.subscribe((_perms, isDefault) => {
+      setIsDefaultDialer(isDefault);
+    });
+    return () => {
+      unsubPerms();
+    };
+  }, []);
+
   // Save to local storage
   useEffect(() => {
     localStorage.setItem('smart_dialer_lang', lang);
@@ -217,9 +259,43 @@ export default function App() {
     };
   }, [activeCall?.state]);
 
-  // Stop active sounds on unmount
+  // Stop active sounds on unmount & listen for real call events
   useEffect(() => {
+    const handleRealCallEvent = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ phoneNumber: string; cleanNumber: string; timestamp: number }>;
+      if (!customEvent.detail) return;
+      const { phoneNumber } = customEvent.detail;
+      const offlineLookup = await roomDbService.lookupIncomingCall(phoneNumber);
+      const displayName =
+        (offlineLookup.isContact ? offlineLookup.record.name : undefined) ||
+        offlineLookup.record?.name ||
+        phoneNumber;
+
+      const newLog: CallLog = {
+        id: `log-${Date.now()}`,
+        name: displayName,
+        phone: phoneNumber,
+        type: 'outgoing',
+        timestamp: Date.now(),
+        duration: 0,
+        isSpam: offlineLookup.record?.spamScore ? offlineLookup.record.spamScore >= 60 : false,
+        spamCategory: offlineLookup.record?.businessCategory,
+        spamScore: offlineLookup.record?.spamScore,
+        location: offlineLookup.record?.city,
+      };
+
+      setCallLogs((prev) => [newLog, ...prev]);
+      roomDbService.callLogs.insert(newLog).catch(console.error);
+      cloudSyncService.saveCallLogToCloud(newLog).catch(console.error);
+
+      setRealCallToast({ show: true, phone: phoneNumber, name: displayName });
+      setTimeout(() => setRealCallToast(null), 3500);
+    };
+
+    window.addEventListener('smart_dialer_real_call', handleRealCallEvent);
+
     return () => {
+      window.removeEventListener('smart_dialer_real_call', handleRealCallEvent);
       if (audioStopFnRef.current) {
         audioStopFnRef.current();
         audioStopFnRef.current = null;
@@ -228,10 +304,14 @@ export default function App() {
         clearTimeout(connectTimeoutRef.current);
       }
     };
-  }, []);
+  }, [syncStatus.user]);
 
-  // Initiate Outgoing Call
-  const handleInitiateCall = async (phoneNumber: string, contactName?: string) => {
+  // Initiate Outgoing Call (supports real cellular call or in-app simulated call)
+  const handleInitiateCall = async (
+    phoneNumber: string,
+    contactName?: string,
+    callModeOverride?: 'real' | 'simulated'
+  ) => {
     if (!phoneNumber) return;
 
     // Stop any existing sounds
@@ -243,8 +323,45 @@ export default function App() {
     // Lookup contact or caller ID via Room Database
     const offlineLookup = await roomDbService.lookupIncomingCall(phoneNumber);
     const callerIdInfo = offlineLookup.record;
-    const displayName = contactName || (offlineLookup.isContact ? offlineLookup.record.name : undefined) || callerIdInfo?.name || phoneNumber;
+    const displayName =
+      contactName ||
+      (offlineLookup.isContact ? offlineLookup.record.name : undefined) ||
+      callerIdInfo?.name ||
+      phoneNumber;
 
+    const mode = callModeOverride || callPermissionService.getCallMode();
+
+    if (mode === 'real') {
+      // Create and persist an outgoing call log entry for this real call
+      const newLog: CallLog = {
+        id: `log-${Date.now()}`,
+        name: displayName,
+        phone: phoneNumber,
+        type: 'outgoing',
+        timestamp: Date.now(),
+        duration: 0,
+        isSpam: callerIdInfo?.spamScore ? callerIdInfo.spamScore >= 60 : false,
+        spamCategory: callerIdInfo?.businessCategory,
+        spamScore: callerIdInfo?.spamScore,
+        location: callerIdInfo?.city,
+      };
+
+      setCallLogs((prev) => [newLog, ...prev]);
+      roomDbService.callLogs.insert(newLog).catch(console.error);
+      cloudSyncService.saveCallLogToCloud(newLog).catch(console.error);
+
+      // Show temporary notification toast
+      setRealCallToast({ show: true, phone: phoneNumber, name: displayName });
+      setTimeout(() => {
+        setRealCallToast(null);
+      }, 4000);
+
+      // Trigger the OS native real call via tel:
+      callPermissionService.makeRealCall(phoneNumber);
+      return;
+    }
+
+    // Otherwise, launch the interactive in-app calling simulation
     const newCall: ActiveCall = {
       phone: phoneNumber,
       name: displayName,
@@ -437,6 +554,18 @@ export default function App() {
     cloudSyncService.saveContactToCloud(contact).catch(console.error);
   };
 
+  const handleImportContacts = async (importedList: Contact[]) => {
+    setContacts((prev) => {
+      const existingMap = new Map(prev.map((c) => [c.id, c]));
+      importedList.forEach((c) => existingMap.set(c.id, c));
+      return Array.from(existingMap.values());
+    });
+    for (const c of importedList) {
+      await roomDbService.contacts.insert(c);
+      cloudSyncService.saveContactToCloud(c).catch(console.error);
+    }
+  };
+
   const handleDeleteContact = async (id: string) => {
     setContacts((prev) => prev.filter((c) => c.id !== id));
     await roomDbService.contacts.delete(id);
@@ -500,11 +629,60 @@ export default function App() {
           lang={lang}
           onToggleLang={() => setLang((prev) => (prev === 'bn' ? 'en' : 'bn'))}
           isDefaultDialer={isDefaultDialer}
-          onToggleDefaultDialer={() => setIsDefaultDialer((prev) => !prev)}
+          onToggleDefaultDialer={() => {
+            const next = !isDefaultDialer;
+            callPermissionService.setDefaultDialer(next);
+          }}
           onSimulateIncoming={handleSimulateIncoming}
           syncStatus={syncStatus}
           onOpenAuth={() => setIsAuthModalOpen(true)}
+          onOpenPermissionModal={() => setIsPermissionModalOpen(true)}
         />
+
+        {/* Default Phone App Permission Status Banner */}
+        <DefaultCallPermissionBanner
+          isDefault={isDefaultDialer}
+          onOpenModal={() => setIsPermissionModalOpen(true)}
+          lang={lang}
+        />
+
+        {/* Real-time Incoming SMS Notification Overlay Banner */}
+        <IncomingSmsBanner
+          lang={lang}
+          onOpenConversation={(phone) => {
+            setActiveSmsThreadPhone(phone);
+            setActiveTab('messages');
+          }}
+          onInitiateCall={(phone, name) => {
+            handleInitiateCall(phone, name);
+          }}
+        />
+
+        {/* Real Call Notification Toast */}
+        {realCallToast && (
+          <div
+            id="real-call-toast"
+            className="mx-3 my-1.5 p-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-lg flex items-center justify-between gap-2.5 animate-fadeIn z-20"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <Phone className="w-3.5 h-3.5 fill-current animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold truncate">
+                  {lang === 'bn' ? 'রিয়েল সিম কল ডায়াল করা হচ্ছে...' : 'Dialing Real Cellular Call...'}
+                </p>
+                <p className="text-[10px] text-emerald-100 truncate">
+                  {realCallToast.name ? `${realCallToast.name} • ` : ''}
+                  {realCallToast.phone}
+                </p>
+              </div>
+            </div>
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/25 font-bold uppercase shrink-0">
+              {lang === 'bn' ? 'সংরক্ষিত' : 'Logged'}
+            </span>
+          </div>
+        )}
 
         {/* Content Body based on Tab */}
         <main id="app-content-body" className="flex-1 overflow-hidden relative">
@@ -534,10 +712,22 @@ export default function App() {
             <ContactsView
               contacts={contacts}
               lang={lang}
+              callLogs={callLogs}
               onInitiateCall={handleInitiateCall}
               onSaveContact={handleSaveContact}
+              onImportContacts={handleImportContacts}
               onDeleteContact={handleDeleteContact}
               onToggleFavorite={handleToggleFavorite}
+            />
+          )}
+
+          {activeTab === 'messages' && (
+            <MessagesView
+              lang={lang}
+              contacts={contacts}
+              onInitiateCall={handleInitiateCall}
+              onOpenPermissionModal={() => setIsPermissionModalOpen(true)}
+              initialThreadPhone={activeSmsThreadPhone}
             />
           )}
 
@@ -609,6 +799,25 @@ export default function App() {
           >
             <Users className="w-4 h-4 mb-0.5" />
             <span className="text-[10px] leading-tight">{t.tabContacts}</span>
+          </button>
+
+          {/* Messages (Google Messages & Offline SMS) */}
+          <button
+            id="nav-tab-messages"
+            onClick={() => setActiveTab('messages')}
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition relative ${
+              activeTab === 'messages'
+                ? 'text-blue-600 dark:text-blue-400 font-bold'
+                : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] leading-tight">{t.tabMessages}</span>
+            {unreadSmsCount > 0 && (
+              <span className="absolute top-1 right-2 min-w-[15px] h-3.5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
+                {unreadSmsCount > 9 ? '9+' : unreadSmsCount}
+              </span>
+            )}
           </button>
 
           {/* Smart Caller ID */}
@@ -698,6 +907,14 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         lang={lang}
         syncStatus={syncStatus}
+      />
+
+      {/* 4. Android Default Call App Permission Activation Modal */}
+      <DefaultCallPermissionModal
+        isOpen={isPermissionModalOpen}
+        onClose={() => setIsPermissionModalOpen(false)}
+        lang={lang}
+        onSimulateIncoming={handleSimulateIncoming}
       />
     </div>
   );

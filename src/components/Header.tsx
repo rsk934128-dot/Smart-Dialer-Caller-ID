@@ -26,6 +26,7 @@ interface HeaderProps {
   onSimulateIncoming: (caller: CallerIdRecord) => void;
   syncStatus: CloudSyncStatus;
   onOpenAuth: () => void;
+  onOpenPermissionModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSimulateIncoming,
   syncStatus,
   onOpenAuth,
+  onOpenPermissionModal,
 }) => {
   const t = TRANSLATIONS[lang];
   const [showSimulateMenu, setShowSimulateMenu] = useState(false);
@@ -106,10 +108,24 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Role Manager Badge */}
             <button
               id="role-manager-badge-btn"
-              onClick={() => setShowRoleDialog(true)}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+              onClick={() => {
+                if (onOpenPermissionModal) {
+                  onOpenPermissionModal();
+                } else {
+                  setShowRoleDialog(true);
+                }
+              }}
+              className={`inline-flex items-center gap-1 text-[11px] font-semibold transition px-1.5 py-0.5 rounded-md ${
+                isDefaultDialer
+                  ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                  : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 animate-pulse'
+              }`}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isDefaultDialer ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                }`}
+              />
               <span>{isDefaultDialer ? t.activeStatus : t.inactiveStatus}</span>
             </button>
           </div>

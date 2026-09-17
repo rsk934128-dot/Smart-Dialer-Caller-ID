@@ -11,16 +11,24 @@ import {
   User,
   X,
   Check,
+  CardSim as SimCard,
+  Smartphone,
+  ShieldCheck,
 } from 'lucide-react';
-import { Contact } from '../types';
+import { Contact, CallLog } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
 import { searchContactsT9 } from '../utils/t9';
+import { ContactDetailSheet } from './ContactDetailSheet';
+import { SimContactsManagerModal } from './SimContactsManagerModal';
+import { callPermissionService } from '../services/callPermissionService';
 
 interface ContactsViewProps {
   contacts: Contact[];
   lang: Language;
-  onInitiateCall: (phone: string, name?: string) => void;
+  callLogs?: CallLog[];
+  onInitiateCall: (phone: string, name?: string, callMode?: 'real' | 'simulated') => void;
   onSaveContact: (contact: Contact) => void;
+  onImportContacts?: (contacts: Contact[]) => void;
   onDeleteContact: (id: string) => void;
   onToggleFavorite: (id: string) => void;
 }
@@ -28,15 +36,21 @@ interface ContactsViewProps {
 export const ContactsView: React.FC<ContactsViewProps> = ({
   contacts,
   lang,
+  callLogs = [],
   onInitiateCall,
   onSaveContact,
+  onImportContacts,
   onDeleteContact,
   onToggleFavorite,
 }) => {
   const t = TRANSLATIONS[lang];
+  const isBn = lang === 'bn';
   const [searchQuery, setSearchQuery] = useState('');
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [isSimModalOpen, setIsSimModalOpen] = useState(false);
+  const [storageFilter, setStorageFilter] = useState<'all' | 'device' | 'sim1' | 'sim2'>('all');
+  const [selectedDetailContact, setSelectedDetailContact] = useState<Contact | null>(null);
 
   // Form states for add/edit modal
   const [formName, setFormName] = useState('');
@@ -46,6 +60,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   const [formCompany, setFormCompany] = useState('');
   const [formTag, setFormTag] = useState('Friend');
   const [formNote, setFormNote] = useState('');
+  const [formStorageLocation, setFormStorageLocation] = useState<'device' | 'sim1' | 'sim2'>('device');
 
   const openNewModal = () => {
     setFormName('');
@@ -55,6 +70,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
     setFormCompany('');
     setFormTag('Friend');
     setFormNote('');
+    setFormStorageLocation('device');
     setEditingContact(null);
     setIsNewModalOpen(true);
   };
@@ -67,6 +83,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
     setFormCompany(c.company || '');
     setFormTag(c.tag || 'Friend');
     setFormNote(c.note || '');
+    setFormStorageLocation(c.storageLocation || 'device');
     setEditingContact(c);
     setIsNewModalOpen(true);
   };
@@ -85,23 +102,44 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
       tag: formTag,
       note: formNote.trim() || undefined,
       isFavorite: editingContact ? editingContact.isFavorite : false,
+      storageLocation: formStorageLocation,
+      simSlot: formStorageLocation === 'sim1' ? 1 : formStorageLocation === 'sim2' ? 2 : undefined,
     };
 
     onSaveContact(newOrUpdated);
     setIsNewModalOpen(false);
   };
 
+  // Count contacts by storage location
+  const sim1Count = useMemo(() => contacts.filter((c) => c.storageLocation === 'sim1').length, [contacts]);
+  const sim2Count = useMemo(() => contacts.filter((c) => c.storageLocation === 'sim2').length, [contacts]);
+  const deviceCount = useMemo(
+    () => contacts.filter((c) => !c.storageLocation || c.storageLocation === 'device').length,
+    [contacts]
+  );
+
   const filteredContacts = useMemo(() => {
-    if (!searchQuery.trim()) return contacts;
+    let result = contacts;
+
+    // Apply storage filter
+    if (storageFilter === 'device') {
+      result = result.filter((c) => !c.storageLocation || c.storageLocation === 'device');
+    } else if (storageFilter === 'sim1') {
+      result = result.filter((c) => c.storageLocation === 'sim1');
+    } else if (storageFilter === 'sim2') {
+      result = result.filter((c) => c.storageLocation === 'sim2');
+    }
+
+    if (!searchQuery.trim()) return result;
     const q = searchQuery.trim().toLowerCase();
 
     // If query is digits, run T9 search to match predictive letters
     const isNumericQuery = /^[0-9]+$/.test(q);
     const t9MatchedIds = isNumericQuery
-      ? new Set(searchContactsT9(contacts, q).map((r) => r.contact.id))
+      ? new Set(searchContactsT9(result, q).map((r) => r.contact.id))
       : new Set<string>();
 
-    return contacts.filter((c) => {
+    return result.filter((c) => {
       if (t9MatchedIds.has(c.id)) return true;
       return (
         c.name.toLowerCase().includes(q) ||
@@ -110,36 +148,108 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
         (c.company && c.company.toLowerCase().includes(q))
       );
     });
-  }, [contacts, searchQuery]);
+  }, [contacts, searchQuery, storageFilter]);
 
   const favorites = filteredContacts.filter((c) => c.isFavorite);
   const others = filteredContacts.filter((c) => !c.isFavorite);
 
   return (
     <div id="contacts-component" className="flex flex-col h-full">
-      {/* Top bar with Search and Add Contact Button */}
-      <div className="px-4 pt-2 pb-3 border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-          <input
-            id="contacts-search-input"
-            type="text"
-            placeholder={t.searchPlaceholder}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-          />
+      {/* Top bar with Search, Filter and SIM Card / Contact Action */}
+      <div className="px-4 pt-2 pb-2.5 border-b border-neutral-200 dark:border-neutral-800 space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <input
+              id="contacts-search-input"
+              type="text"
+              placeholder={t.searchPlaceholder}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+
+          <button
+            id="add-new-contact-header-btn"
+            onClick={openNewModal}
+            className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow-sm shrink-0"
+            title={t.addContact}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span className="hidden sm:inline">{t.addContact}</span>
+          </button>
         </div>
 
-        <button
-          id="add-new-contact-header-btn"
-          onClick={openNewModal}
-          className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow-sm"
-          title={t.addContact}
-        >
-          <UserPlus className="w-4 h-4" />
-          <span className="hidden sm:inline">{t.addContact}</span>
-        </button>
+        {/* Filter bar & SIM Manager Button */}
+        <div className="flex items-center justify-between gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              id="filter-all-contacts-btn"
+              onClick={() => setStorageFilter('all')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
+                storageFilter === 'all'
+                  ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-2xs'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              {isBn ? 'সকল' : 'All'} ({contacts.length})
+            </button>
+
+            <button
+              id="filter-sim1-contacts-btn"
+              onClick={() => setStorageFilter('sim1')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition ${
+                storageFilter === 'sim1'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              <SimCard className="w-3 h-3" />
+              <span>{isBn ? 'সিম ১' : 'SIM 1'}</span>
+              <span className="text-[10px] opacity-75 font-mono">({sim1Count})</span>
+            </button>
+
+            <button
+              id="filter-sim2-contacts-btn"
+              onClick={() => setStorageFilter('sim2')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition ${
+                storageFilter === 'sim2'
+                  ? 'bg-cyan-600 text-white shadow-2xs'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              <SimCard className="w-3 h-3" />
+              <span>{isBn ? 'সিম ২' : 'SIM 2'}</span>
+              <span className="text-[10px] opacity-75 font-mono">({sim2Count})</span>
+            </button>
+
+            <button
+              id="filter-device-contacts-btn"
+              onClick={() => setStorageFilter('device')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition ${
+                storageFilter === 'device'
+                  ? 'bg-neutral-700 text-white'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              <Smartphone className="w-3 h-3" />
+              <span>{isBn ? 'ফোন' : 'Phone'}</span>
+              <span className="text-[10px] opacity-75 font-mono">({deviceCount})</span>
+            </button>
+          </div>
+
+          {/* SIM Card Manager & Permission Button (Primary User Request) */}
+          <button
+            id="open-sim-contacts-manager-btn"
+            onClick={() => setIsSimModalOpen(true)}
+            className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-2xs hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition active:scale-95 shrink-0"
+            title={isBn ? 'সিমের নম্বরগুলো দেখুন ও পারমিশন অন করুন' : 'View SIM numbers & manage permissions'}
+          >
+            <SimCard className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{isBn ? 'সিমের নম্বর ও পারমিশন' : 'SIM Contacts & Perms'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Contacts List */}
@@ -161,7 +271,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                 >
                   <div
                     className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
-                    onClick={() => onInitiateCall(c.phone, c.name)}
+                    onClick={() => setSelectedDetailContact(c)}
                   >
                     <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0">
                       {c.name.charAt(0)}
@@ -174,6 +284,18 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                         {c.nameEn && c.nameEn !== c.name && (
                           <span className="text-[11px] text-neutral-400 font-normal truncate">
                             ({c.nameEn})
+                          </span>
+                        )}
+                        {c.storageLocation === 'sim1' && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                            <SimCard className="w-2.5 h-2.5" />
+                            SIM 1
+                          </span>
+                        )}
+                        {c.storageLocation === 'sim2' && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-cyan-100 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300">
+                            <SimCard className="w-2.5 h-2.5" />
+                            SIM 2
                           </span>
                         )}
                         {c.tag && (
@@ -240,7 +362,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
               >
                 <div
                   className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
-                  onClick={() => onInitiateCall(c.phone, c.name)}
+                  onClick={() => setSelectedDetailContact(c)}
                 >
                   <div className="w-10 h-10 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center justify-center font-bold text-sm shrink-0">
                     {c.name.charAt(0)}
@@ -253,6 +375,18 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                       {c.nameEn && c.nameEn !== c.name && (
                         <span className="text-[11px] text-neutral-400 font-normal truncate">
                           ({c.nameEn})
+                        </span>
+                      )}
+                      {c.storageLocation === 'sim1' && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                          <SimCard className="w-2.5 h-2.5" />
+                          SIM 1
+                        </span>
+                      )}
+                      {c.storageLocation === 'sim2' && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-cyan-100 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300">
+                          <SimCard className="w-2.5 h-2.5" />
+                          SIM 2
                         </span>
                       )}
                       {c.company && (
@@ -406,6 +540,52 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
               </div>
 
               <div>
+                <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 mb-1.5 block">
+                  {isBn ? 'সংরক্ষণের স্থান (Storage Location)' : 'Storage Destination'}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormStorageLocation('device')}
+                    className={`p-2 rounded-xl border text-left flex flex-col items-center justify-center gap-1 transition ${
+                      formStorageLocation === 'device'
+                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold'
+                        : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span className="text-[10px]">{isBn ? 'ফোন মেমোরি' : 'Phone'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormStorageLocation('sim1')}
+                    className={`p-2 rounded-xl border text-left flex flex-col items-center justify-center gap-1 transition ${
+                      formStorageLocation === 'sim1'
+                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold'
+                        : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    }`}
+                  >
+                    <SimCard className="w-4 h-4 text-emerald-600" />
+                    <span className="text-[10px]">{isBn ? 'সিম ১ (GP)' : 'SIM 1'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormStorageLocation('sim2')}
+                    className={`p-2 rounded-xl border text-left flex flex-col items-center justify-center gap-1 transition ${
+                      formStorageLocation === 'sim2'
+                        ? 'border-cyan-500 bg-cyan-50/70 dark:bg-cyan-950/40 text-cyan-800 dark:text-cyan-300 font-bold'
+                        : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    }`}
+                  >
+                    <SimCard className="w-4 h-4 text-cyan-600" />
+                    <span className="text-[10px]">{isBn ? 'সিম ২ (BL)' : 'SIM 2'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
                 <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 mb-1 block">
                   {t.notes}
                 </label>
@@ -439,6 +619,45 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
           </div>
         </div>
       )}
+      {/* Contact Detailed Slide-Up Sheet */}
+      <ContactDetailSheet
+        contact={selectedDetailContact}
+        isOpen={!!selectedDetailContact}
+        onClose={() => setSelectedDetailContact(null)}
+        lang={lang}
+        callLogs={callLogs}
+        onInitiateCall={onInitiateCall}
+        onEditContact={(c) => {
+          setSelectedDetailContact(null);
+          openEditModal(c);
+        }}
+        onDeleteContact={(id) => {
+          onDeleteContact(id);
+          setSelectedDetailContact(null);
+        }}
+        onToggleFavorite={(id) => {
+          onToggleFavorite(id);
+          setSelectedDetailContact((prev) =>
+            prev && prev.id === id ? { ...prev, isFavorite: !prev.isFavorite } : prev
+          );
+        }}
+      />
+
+      {/* SIM Card Contacts & Permissions Modal (User Request) */}
+      <SimContactsManagerModal
+        isOpen={isSimModalOpen}
+        onClose={() => setIsSimModalOpen(false)}
+        lang={lang}
+        existingContacts={contacts}
+        onImportContacts={(imported) => {
+          if (onImportContacts) {
+            onImportContacts(imported);
+          } else {
+            imported.forEach((c) => onSaveContact(c));
+          }
+        }}
+        onInitiateCall={onInitiateCall}
+      />
     </div>
   );
 };

@@ -1,6 +1,6 @@
 {
   "name": "Smart Dialer & Caller ID",
-  "description": "একটি আধুনিক কলার আইডি, ডায়ালার, কন্টাক্ট ও কল লগ সিমুলেশন এবং অ্যান্ড্রয়েড আর্কিটেকচার গাইড অ্যাপ।",
+  "description": "একটি আধুনিক কলার আইডি, ডায়ালার, সিম কন্টাক্ট, গুগল মেসেজ পারমিশন ও অফলাইন রিয়েল-টাইম এসএমএস সুবিধা সমৃদ্ধ অ্যান্ড্রয়েড টেলিকম ও মেসেজিং আর্কিটেকচার অ্যাপ।",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

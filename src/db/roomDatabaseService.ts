@@ -3,8 +3,9 @@ import { contactDao } from './daos/contactDao';
 import { callLogDao, CallLogStats } from './daos/callLogDao';
 import { spamDao } from './daos/spamDao';
 import { callerIdDao } from './daos/callerIdDao';
-import { Contact, CallLog, CallerIdRecord, SpamEntity, RoomDbMetrics } from '../types';
-import { INITIAL_CONTACTS, INITIAL_CALL_LOGS, CALLER_ID_DATABASE, normalizePhone } from '../data/mockData';
+import { smsDao } from './daos/smsDao';
+import { Contact, CallLog, CallerIdRecord, SpamEntity, RoomDbMetrics, SmsMessage } from '../types';
+import { INITIAL_CONTACTS, INITIAL_CALL_LOGS, INITIAL_SMS_MESSAGES, CALLER_ID_DATABASE, normalizePhone } from '../data/mockData';
 
 export interface OfflineLookupResult {
   record: CallerIdRecord;
@@ -34,6 +35,8 @@ export class RoomDatabaseService {
   public readonly callLogs = callLogDao;
   public readonly spam = spamDao;
   public readonly callerId = callerIdDao;
+  public readonly messages = smsDao;
+  public readonly sms = smsDao;
 
   /**
    * Subscribe to database state changes
@@ -67,6 +70,7 @@ export class RoomDatabaseService {
         await roomDb.callLogs.clear();
         await roomDb.spamList.clear();
         await roomDb.callerIdCache.clear();
+        await roomDb.messages.clear();
         await roomDb.dbMetadata.clear();
       }
 
@@ -129,7 +133,10 @@ export class RoomDatabaseService {
       ];
       await spamDao.bulkInsert(initialSpamList);
 
-      // 5. Write metadata
+      // 5. Seed Offline Room SMS Messages
+      await smsDao.bulkPut(INITIAL_SMS_MESSAGES);
+
+      // 6. Write metadata
       await roomDb.dbMetadata.put({
         key: 'is_seeded',
         value: 'true',
@@ -137,9 +144,15 @@ export class RoomDatabaseService {
       });
       await roomDb.dbMetadata.put({
         key: 'schema_version',
-        value: '1.0.0',
+        value: '2.0.0',
         updatedAt: Date.now(),
       });
+    } else {
+      // If already seeded previously, ensure SMS messages are populated
+      const existingMsgCount = await smsDao.count();
+      if (existingMsgCount === 0) {
+        await smsDao.bulkPut(INITIAL_SMS_MESSAGES);
+      }
     }
 
     this.isInitialized = true;
@@ -338,11 +351,12 @@ export class RoomDatabaseService {
    * Get overall Room database metrics and status
    */
   async getMetrics(): Promise<RoomDbMetrics> {
-    const [contactsCount, callLogsCount, spamCount, callerIdCacheCount] = await Promise.all([
+    const [contactsCount, callLogsCount, spamCount, callerIdCacheCount, messagesCount] = await Promise.all([
       contactDao.count(),
       callLogDao.count(),
       spamDao.count(),
       callerIdDao.count(),
+      smsDao.count(),
     ]);
 
     return {
@@ -350,6 +364,7 @@ export class RoomDatabaseService {
       callLogsCount,
       spamCount,
       callerIdCacheCount,
+      messagesCount,
       isInitialized: this.isInitialized,
       lastLookupTimeMs: this.lastLookupTimeMs,
     };
@@ -366,22 +381,24 @@ export class RoomDatabaseService {
    * Export all database tables as JSON (backup simulation)
    */
   async exportDatabaseJson(): Promise<string> {
-    const [contacts, callLogs, spamList, callerIdCache] = await Promise.all([
+    const [contacts, callLogs, spamList, callerIdCache, messages] = await Promise.all([
       contactDao.getAll(),
       callLogDao.getAll(500),
       spamDao.getAll(),
       callerIdDao.getAll(),
+      smsDao.getAll(),
     ]);
 
     const dump = {
       databaseName: 'SmartDialerRoomDB',
       exportedAt: new Date().toISOString(),
-      version: 1,
+      version: 2,
       data: {
         contacts,
         callLogs,
         spamList,
         callerIdCache,
+        messages,
       },
     };
 

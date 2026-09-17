@@ -1,4 +1,4 @@
-import { Contact, CallLog, CallerIdRecord } from '../types';
+import { Contact, CallLog, CallerIdRecord, SmsMessage } from '../types';
 
 export const INITIAL_CONTACTS: Contact[] = [
   {
@@ -12,6 +12,8 @@ export const INITIAL_CONTACTS: Contact[] = [
     isFavorite: true,
     company: 'Dhaka University',
     note: 'বড় ভাই',
+    storageLocation: 'sim1',
+    simSlot: 1,
   },
   {
     id: 'c-2',
@@ -24,6 +26,8 @@ export const INITIAL_CONTACTS: Contact[] = [
     isFavorite: true,
     company: 'Square Hospital',
     note: 'ফ্যামিলি ফিজিশিয়ান',
+    storageLocation: 'sim2',
+    simSlot: 2,
   },
   {
     id: 'c-3',
@@ -36,6 +40,7 @@ export const INITIAL_CONTACTS: Contact[] = [
     isFavorite: false,
     company: 'Tech Solutions Ltd.',
     note: 'প্রজেক্ট ম্যানেজার',
+    storageLocation: 'device',
   },
   {
     id: 'c-4',
@@ -48,6 +53,8 @@ export const INITIAL_CONTACTS: Contact[] = [
     isFavorite: true,
     company: 'Freelance Architect',
     note: 'কলেজ বন্ধু',
+    storageLocation: 'sim1',
+    simSlot: 1,
   },
   {
     id: 'c-5',
@@ -59,6 +66,8 @@ export const INITIAL_CONTACTS: Contact[] = [
     tag: 'Work',
     isFavorite: false,
     company: 'Creative Studio',
+    storageLocation: 'sim2',
+    simSlot: 2,
   },
   {
     id: 'c-6',
@@ -292,3 +301,249 @@ export function lookupCallerId(rawPhone: string): CallerIdRecord | null {
 
   return null;
 }
+
+export interface SimCardInfo {
+  slot: 1 | 2;
+  carrier: string;
+  carrierBn: string;
+  phoneNumber?: string;
+  simState: 'ready' | 'absent' | 'locked';
+  totalCapacity: number;
+  usedCapacity: number;
+}
+
+export const MOCK_SIM_CARDS: SimCardInfo[] = [
+  {
+    slot: 1,
+    carrier: 'Grameenphone 4G',
+    carrierBn: 'গ্রামীণফোন ৪জি (সিম ১)',
+    phoneNumber: '+880 1711-000111',
+    simState: 'ready',
+    totalCapacity: 250,
+    usedCapacity: 14,
+  },
+  {
+    slot: 2,
+    carrier: 'Banglalink 4G',
+    carrierBn: 'বাংলালিংক ৪জি (সিম ২)',
+    phoneNumber: '+880 1912-999222',
+    simState: 'ready',
+    totalCapacity: 250,
+    usedCapacity: 9,
+  },
+];
+
+export interface RawSimContact {
+  id: string;
+  name: string;
+  phone: string;
+  simSlot: 1 | 2;
+  carrier: string;
+  isImported?: boolean;
+}
+
+export const MOCK_RAW_SIM_CONTACTS: RawSimContact[] = [
+  {
+    id: 'sim1-1',
+    name: 'জিপি হেল্পলাইন (Customer Care)',
+    phone: '121',
+    simSlot: 1,
+    carrier: 'Grameenphone',
+  },
+  {
+    id: 'sim1-2',
+    name: 'জাতীয় জরুরি সেবা (Emergency)',
+    phone: '999',
+    simSlot: 1,
+    carrier: 'Grameenphone',
+  },
+  {
+    id: 'sim1-3',
+    name: 'তানভীর আহমেদ (বড় ভাই)',
+    phone: '+880 1711-234567',
+    simSlot: 1,
+    carrier: 'Grameenphone',
+  },
+  {
+    id: 'sim1-4',
+    name: 'আম্মা (SIM 1 Contact)',
+    phone: '+880 1715-998877',
+    simSlot: 1,
+    carrier: 'Grameenphone',
+  },
+  {
+    id: 'sim1-5',
+    name: 'পল্লী বিদ্যুৎ অভিযোগ কেন্দ্র',
+    phone: '16200',
+    simSlot: 1,
+    carrier: 'Grameenphone',
+  },
+  {
+    id: 'sim1-6',
+    name: 'সাকিব আল হাসান',
+    phone: '+880 1610-998877',
+    simSlot: 1,
+    carrier: 'Grameenphone',
+  },
+  {
+    id: 'sim2-1',
+    name: 'বাংলালিংক হেল্পলাইন (Customer Care)',
+    phone: '121',
+    simSlot: 2,
+    carrier: 'Banglalink',
+  },
+  {
+    id: 'sim2-2',
+    name: 'ফায়ার সার্ভিস ও সিভিল ডিফেন্স',
+    phone: '199',
+    simSlot: 2,
+    carrier: 'Banglalink',
+  },
+  {
+    id: 'sim2-3',
+    name: 'ডাঃ রফিকুল ইসলাম',
+    phone: '+880 1819-876543',
+    simSlot: 2,
+    carrier: 'Banglalink',
+  },
+  {
+    id: 'sim2-4',
+    name: 'নুসরাত চৌধুরী',
+    phone: '+880 1552-112233',
+    simSlot: 2,
+    carrier: 'Banglalink',
+  },
+  {
+    id: 'sim2-5',
+    name: 'অ্যাম্বুলেন্স জরুরি সার্ভিস',
+    phone: '999',
+    simSlot: 2,
+    carrier: 'Banglalink',
+  },
+  {
+    id: 'sim2-6',
+    name: 'ড্রাইভার কাশেম ভাই',
+    phone: '+880 1913-776655',
+    simSlot: 2,
+    carrier: 'Banglalink',
+  },
+];
+
+const NOW_MS = Date.now();
+const MINUTE = 60 * 1000;
+
+export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
+  // Google Messages / Security Verification OTP
+  {
+    id: 'sms-1',
+    senderPhone: 'Google',
+    senderName: 'Google Verification',
+    recipientPhone: '+880 1711-000111',
+    body: 'G-847291 is your Google verification code. Do not share this code with anyone.',
+    timestamp: NOW_MS - 15 * MINUTE,
+    type: 'inbox',
+    status: 'read',
+    simSlot: 1,
+    isOtp: true,
+    otpCode: '847291',
+    isSpam: false,
+    isOfflineStored: true,
+  },
+  // Tanvir Ahmed Conversation Thread
+  {
+    id: 'sms-2',
+    senderPhone: '+880 1711-234567',
+    senderName: 'তানভীর আহমেদ',
+    recipientPhone: '+880 1711-000111',
+    body: 'কখন পৌঁছাবি? আম্মা জিজ্ঞেস করছে।',
+    timestamp: NOW_MS - 2 * HOUR,
+    type: 'inbox',
+    status: 'read',
+    simSlot: 1,
+    isSpam: false,
+    isOfflineStored: true,
+  },
+  {
+    id: 'sms-3',
+    senderPhone: '+880 1711-000111',
+    recipientPhone: '+880 1711-234567',
+    recipientName: 'তানভীর আহমেদ',
+    body: 'আমি রাস্তায় আছি ভাইয়া, আর ১৫-২০ মিনিটের মধ্যে পৌঁছে যাব।',
+    timestamp: NOW_MS - 110 * MINUTE,
+    type: 'sent',
+    status: 'delivered',
+    simSlot: 1,
+    isSpam: false,
+    isOfflineStored: true,
+  },
+  {
+    id: 'sms-4',
+    senderPhone: '+880 1711-234567',
+    senderName: 'তানভীর আহমেদ',
+    recipientPhone: '+880 1711-000111',
+    body: 'ঠিক আছে, আসার সময় ফার্মেসি থেকে প্যারাসিটামল নিয়ে আসিস।',
+    timestamp: NOW_MS - 45 * MINUTE,
+    type: 'inbox',
+    status: 'received',
+    simSlot: 1,
+    isSpam: false,
+    isOfflineStored: true,
+  },
+  // bKash Transaction notification
+  {
+    id: 'sms-5',
+    senderPhone: 'bKash',
+    senderName: 'bKash Notification',
+    recipientPhone: '+880 1711-000111',
+    body: 'You have received Tk 4,500.00 from 01711234567. Fee Tk 0.00. Balance Tk 9,450.50. TrxID 9K28XA89L2 at 17/09/2026 16:30.',
+    timestamp: NOW_MS - 3 * HOUR,
+    type: 'inbox',
+    status: 'read',
+    simSlot: 1,
+    isOtp: false,
+    isSpam: false,
+    isOfflineStored: true,
+  },
+  // Dr. Rafiqul Islam Appointment Confirmation
+  {
+    id: 'sms-6',
+    senderPhone: '+880 1819-876543',
+    senderName: 'ডাঃ রফিকুল ইসলাম',
+    recipientPhone: '+880 1711-000111',
+    body: 'আপনার সিরিয়াল নং ১২ কনফার্ম করা হয়েছে। আগামীকাল বিকেল ৫টায় স্কয়ার হাসপাতালে চেম্বারে উপস্থিত থাকুন।',
+    timestamp: NOW_MS - 5 * HOUR,
+    type: 'inbox',
+    status: 'read',
+    simSlot: 2,
+    isSpam: false,
+    isOfflineStored: true,
+  },
+  // Telecom Promotion (Grameenphone)
+  {
+    id: 'sms-7',
+    senderPhone: 'GP-INFO',
+    senderName: 'Grameenphone 4G',
+    recipientPhone: '+880 1711-000111',
+    body: 'অবিশ্বাস্য অফার! মাত্র ৪৯ টাকায় ৫ জিবি ইন্টারনেট মেয়াদ ৩ দিন। ডায়াল করুন *১২১*৫০১# এখনই।',
+    timestamp: NOW_MS - 8 * HOUR,
+    type: 'inbox',
+    status: 'read',
+    simSlot: 1,
+    isSpam: false,
+    isOfflineStored: true,
+  },
+  // Suspected Spam / Fraud SMS
+  {
+    id: 'sms-8',
+    senderPhone: '+880 1300-998811',
+    senderName: 'লটারি ও ফেক প্রাইজ (Fraud)',
+    recipientPhone: '+880 1711-000111',
+    body: 'অভিনন্দন! আপনি জিতেছেন ১ লক্ষ টাকার লটারি পুরস্কার! টাকা তুলতে অবিলম্বে আপনার বিকাশ পিন ও ওটিপি দিন।',
+    timestamp: NOW_MS - 20 * HOUR,
+    type: 'inbox',
+    status: 'read',
+    simSlot: 1,
+    isSpam: true,
+    isOfflineStored: true,
+  },
+];

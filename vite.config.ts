@@ -24,13 +24,14 @@ export default defineConfig(() => {
           name: 'Smart Dialer & Caller ID',
           short_name: 'SmartDialer',
           description:
-            'একটি আধুনিক কলার আইডি, ডায়ালার, কন্টাক্ট ও কল লগ সিমুলেশন এবং অ্যান্ড্রয়েড আর্কিটেকচার গাইড অ্যাপ।',
+            'একটি আধুনিক কলার আইডি, ডায়ালার, সিম কন্টাক্ট, গুগল মেসেজ ও অফলাইন এসএমএস সুবিধা সমৃদ্ধ অ্যান্ড্রয়েড টেলিকম ও মেসেজিং অ্যাপ।',
           theme_color: '#059669',
           background_color: '#0f172a',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',
           scope: '/',
+          categories: ['utilities', 'productivity', 'communication'],
           icons: [
             {
               src: '/pwa-192x192.png',
@@ -55,6 +56,45 @@ export default defineConfig(() => {
               sizes: '512x512',
               type: 'image/svg+xml',
               purpose: 'any',
+            },
+          ],
+          shortcuts: [
+            {
+              name: 'ডায়ালপ্যাড (Dialpad)',
+              short_name: 'ডায়াল',
+              description: 'দ্রুত ডায়ালপ্যাড খুলুন',
+              url: '/',
+              icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }],
+            },
+            {
+              name: 'এসএমএস মেসেজ (Messages)',
+              short_name: 'মেসেজ',
+              description: 'অফলাইন এসএমএস ইনবক্স খুলুন',
+              url: '/?tab=messages',
+              icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }],
+            },
+            {
+              name: 'কন্টাক্টস (Contacts)',
+              short_name: 'কন্টাক্টস',
+              description: 'সিম ও ফোনের কন্টাক্ট তালিকা',
+              url: '/?tab=contacts',
+              icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }],
+            },
+          ],
+          screenshots: [
+            {
+              src: '/pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              form_factor: 'narrow',
+              label: 'Smart Dialer Mobile',
+            },
+            {
+              src: '/pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Smart Dialer Tablet',
             },
           ],
         },

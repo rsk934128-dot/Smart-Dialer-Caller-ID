@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Phone,
   Delete,
@@ -10,6 +10,9 @@ import {
   Star,
   ArrowRight,
   HelpCircle,
+  Radio,
+  Smartphone,
+  Check,
 } from 'lucide-react';
 import { Contact } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
@@ -20,11 +23,12 @@ import {
   getT9MappingHint,
   T9SearchResult,
 } from '../utils/t9';
+import { callPermissionService, CallMode } from '../services/callPermissionService';
 
 interface KeypadProps {
   lang: Language;
   contacts: Contact[];
-  onInitiateCall: (phoneNumber: string, contactName?: string) => void;
+  onInitiateCall: (phoneNumber: string, contactName?: string, callMode?: 'real' | 'simulated') => void;
   onOpenAddContact: (phoneNumber: string) => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
@@ -61,7 +65,22 @@ export const Keypad: React.FC<KeypadProps> = ({
   const t = TRANSLATIONS[lang];
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedSim, setSelectedSim] = useState<1 | 2>(1);
+  const [callMode, setCallMode] = useState<CallMode>(() => callPermissionService.getCallMode());
   const backspaceTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const unsub = callPermissionService.subscribe((_perms, _isDef, mode) => {
+      setCallMode(mode);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleModeChange = (mode: CallMode) => {
+    setCallMode(mode);
+    callPermissionService.setCallMode(mode);
+  };
+
+  const isBn = lang === 'bn';
 
   const handleKeyPress = (digit: string) => {
     setPhoneNumber((prev) => prev + digit);
@@ -375,21 +394,107 @@ export const Keypad: React.FC<KeypadProps> = ({
         ))}
       </div>
 
-      {/* Big Action Call Button */}
-      <div className="flex items-center justify-center py-2.5 px-6 shrink-0">
-        <button
-          id="dialpad-call-btn"
-          disabled={!phoneNumber}
-          onClick={() => onInitiateCall(phoneNumber)}
-          className={`w-full py-3 rounded-2xl flex items-center justify-center gap-2.5 font-semibold text-lg transition-all shadow-md ${
-            phoneNumber
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-98 shadow-emerald-900/20'
-              : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-600 cursor-not-allowed'
-          }`}
-        >
-          <Phone className="w-6 h-6 fill-current" />
-          <span>{t.callBtn}</span>
-        </button>
+      {/* Call Mode Switcher & Sim Slot Indicator */}
+      <div className="flex items-center justify-between px-6 py-1 shrink-0 text-xs">
+        <div className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 p-0.5 rounded-xl border border-neutral-200/60 dark:border-neutral-700/60">
+          <button
+            type="button"
+            onClick={() => handleModeChange('real')}
+            className={`px-2 py-1 rounded-lg font-semibold text-[11px] transition flex items-center gap-1 ${
+              callMode === 'real'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+            }`}
+          >
+            <Smartphone className="w-3 h-3" />
+            <span>{isBn ? 'রিয়েল সিম কল' : 'Real SIM Call'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange('simulated')}
+            className={`px-2 py-1 rounded-lg font-semibold text-[11px] transition flex items-center gap-1 ${
+              callMode === 'simulated'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+            }`}
+          >
+            <Radio className="w-3 h-3" />
+            <span>{isBn ? 'ইন-অ্যাপ স্ক্রিন' : 'In-App UI'}</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+          <span>SIM {selectedSim}</span>
+          <button
+            type="button"
+            onClick={() => setSelectedSim((prev) => (prev === 1 ? 2 : 1))}
+            className="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-700 text-[10px] font-bold hover:bg-neutral-300 dark:hover:bg-neutral-600 transition"
+          >
+            {isBn ? 'সুইচ' : 'Switch'}
+          </button>
+        </div>
+      </div>
+
+      {/* Action Call Buttons Area */}
+      <div className="py-2 px-6 shrink-0 space-y-2">
+        {phoneNumber ? (
+          <div className="flex gap-2">
+            {/* Primary Call Button (based on selected mode) */}
+            <button
+              id="dialpad-call-btn"
+              onClick={() => onInitiateCall(phoneNumber, undefined, callMode)}
+              className="flex-1 py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-base transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white active:scale-98 shadow-emerald-900/20"
+            >
+              <Phone className="w-5 h-5 fill-current" />
+              <span>
+                {callMode === 'real'
+                  ? isBn
+                    ? 'রিয়েল সিম কল করুন'
+                    : 'Real SIM Call'
+                  : isBn
+                  ? 'ইন-অ্যাপ ডায়াল করুন'
+                  : 'In-App Call Screen'}
+              </span>
+            </button>
+
+            {/* Alternate Quick Action Button */}
+            <button
+              id="dialpad-alt-call-btn"
+              onClick={() =>
+                onInitiateCall(
+                  phoneNumber,
+                  undefined,
+                  callMode === 'real' ? 'simulated' : 'real'
+                )
+              }
+              title={
+                callMode === 'real'
+                  ? isBn
+                    ? 'ইন-অ্যাপ স্ক্রিনে টেস্ট করুন'
+                    : 'Test in In-App Screen'
+                  : isBn
+                  ? 'সরাসরি মোবাইলের সিম দিয়ে রিয়েল কল করুন'
+                  : 'Make Real SIM Call'
+              }
+              className="px-3.5 py-3 rounded-2xl flex items-center justify-center border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-semibold active:scale-95 transition"
+            >
+              {callMode === 'real' ? (
+                <Radio className="w-4 h-4 text-cyan-600" />
+              ) : (
+                <Smartphone className="w-4 h-4 text-emerald-600" />
+              )}
+            </button>
+          </div>
+        ) : (
+          <button
+            id="dialpad-call-btn-disabled"
+            disabled
+            className="w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-base bg-neutral-200 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-600 cursor-not-allowed"
+          >
+            <Phone className="w-5 h-5 fill-current" />
+            <span>{t.callBtn}</span>
+          </button>
+        )}
       </div>
     </div>
   );

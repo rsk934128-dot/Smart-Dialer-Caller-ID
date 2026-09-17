@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { Contact, CallLog, CallerIdRecord, SpamEntity } from '../types';
+import { Contact, CallLog, CallerIdRecord, SpamEntity, SmsMessage } from '../types';
 
 export interface ContactDbEntity extends Contact {
   normalizedPhone: string;
@@ -17,6 +17,11 @@ export interface CallerIdDbEntity extends CallerIdRecord {
   cachedAt: number;
 }
 
+export interface SmsMessageDbEntity extends SmsMessage {
+  normalizedPhone: string;
+  digitsOnly: string;
+}
+
 export interface MetadataDbEntity {
   key: string;
   value: string;
@@ -28,8 +33,8 @@ export interface MetadataDbEntity {
  * 
  * Simulates:
  * @Database(
- *   entities = [ContactEntity::class, CallLogEntity::class, SpamEntity::class, CallerIdCacheEntity::class],
- *   version = 1
+ *   entities = [ContactEntity::class, CallLogEntity::class, SpamEntity::class, CallerIdCacheEntity::class, SmsMessageEntity::class],
+ *   version = 2
  * )
  */
 export class SmartDialerRoomDB extends Dexie {
@@ -37,6 +42,7 @@ export class SmartDialerRoomDB extends Dexie {
   callLogs!: EntityTable<CallLogDbEntity, 'id'>;
   spamList!: EntityTable<SpamEntity, 'phone'>;
   callerIdCache!: EntityTable<CallerIdDbEntity, 'phone'>;
+  messages!: EntityTable<SmsMessageDbEntity, 'id'>;
   dbMetadata!: EntityTable<MetadataDbEntity, 'key'>;
 
   constructor() {
@@ -49,6 +55,15 @@ export class SmartDialerRoomDB extends Dexie {
       spamList: 'phone, normalizedPhone, score, category, isBlocked, reportsCount',
       callerIdCache: 'phone, normalizedPhone, digitsOnly, spamScore, verified',
       dbMetadata: 'key',
+    });
+
+    this.version(2).stores({
+      contacts: 'id, name, phone, normalizedPhone, digitsOnly, isFavorite, tag',
+      callLogs: 'id, phone, normalizedPhone, digitsOnly, type, timestamp, isSpam',
+      spamList: 'phone, normalizedPhone, score, category, isBlocked, reportsCount',
+      callerIdCache: 'phone, normalizedPhone, digitsOnly, spamScore, verified',
+      dbMetadata: 'key',
+      messages: 'id, senderPhone, recipientPhone, normalizedPhone, digitsOnly, type, timestamp, status, isOtp, isSpam, simSlot',
     });
   }
 }
