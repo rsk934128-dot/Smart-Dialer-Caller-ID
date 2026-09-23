@@ -12,10 +12,14 @@ import {
   X,
   Cloud,
   User as UserIcon,
+  Sun,
+  Moon,
+  Database,
 } from 'lucide-react';
 import { Language, TRANSLATIONS } from '../utils/i18n';
 import { CallerIdRecord } from '../types';
 import { CloudSyncStatus } from '../services/cloudSyncService';
+import { ThemeMode } from '../utils/theme';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
@@ -27,6 +31,9 @@ interface HeaderProps {
   syncStatus: CloudSyncStatus;
   onOpenAuth: () => void;
   onOpenPermissionModal?: () => void;
+  onOpenBackup?: () => void;
+  theme?: ThemeMode;
+  onToggleTheme?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,6 +45,9 @@ export const Header: React.FC<HeaderProps> = ({
   syncStatus,
   onOpenAuth,
   onOpenPermissionModal,
+  onOpenBackup,
+  theme = 'dark',
+  onToggleTheme,
 }) => {
   const t = TRANSLATIONS[lang];
   const [showSimulateMenu, setShowSimulateMenu] = useState(false);
@@ -90,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       id="app-header"
-      className="px-4 py-3 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800 shrink-0 select-none"
+      className="px-4 py-3 bg-[var(--color-header-bg)] backdrop-blur-md border-b border-[var(--color-border)] shrink-0 select-none transition-colors duration-200"
     >
       <div className="max-w-md mx-auto flex items-center justify-between gap-2">
         {/* Brand & Status */}
@@ -190,6 +200,22 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
+          {/* Theme Toggle Button */}
+          <button
+            id="theme-toggle-btn"
+            type="button"
+            onClick={onToggleTheme}
+            className="p-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition flex items-center justify-center cursor-pointer shadow-xs"
+            title={theme === 'dark' ? t.themeLight : t.themeDark}
+            aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? (
+              <Sun className="w-3.5 h-3.5 text-amber-400" />
+            ) : (
+              <Moon className="w-3.5 h-3.5 text-indigo-600" />
+            )}
+          </button>
+
           {/* Language Toggle */}
           <button
             id="lang-toggle-btn"
@@ -200,6 +226,50 @@ export const Header: React.FC<HeaderProps> = ({
             <Languages className="w-3.5 h-3.5" />
             <span>{lang === 'bn' ? 'বাং' : 'EN'}</span>
           </button>
+
+          {/* Room DB to Firestore Backup Tab / Button */}
+          {(() => {
+            let backupTooltip = isBn ? 'রুম ডিবি ব্যাকআপ ও ক্লাউড সিঙ্ক' : 'Room DB Backup & Cloud Sync';
+            let isSynced = false;
+            try {
+              if (syncStatus?.lastSyncedAt) {
+                const dateObj =
+                  syncStatus.lastSyncedAt instanceof Date
+                    ? syncStatus.lastSyncedAt
+                    : new Date(syncStatus.lastSyncedAt);
+                if (!isNaN(dateObj.getTime())) {
+                  isSynced = true;
+                  const dateStr = isBn
+                    ? dateObj.toLocaleDateString('bn-BD')
+                    : dateObj.toLocaleDateString();
+                  const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  backupTooltip = isBn
+                    ? `সর্বশেষ ব্যাকআপ: ${dateStr} ${timeStr}`
+                    : `Last backup: ${dateStr} ${timeStr}`;
+                }
+              }
+            } catch {
+              // fallback to default tooltip
+            }
+
+            return (
+              <button
+                id="header-backup-btn"
+                type="button"
+                onClick={onOpenBackup}
+                className="px-2.5 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                title={backupTooltip}
+              >
+                <Database className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span className="hidden md:inline">{isBn ? 'ব্যাকআপ' : 'Backup'}</span>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isSynced ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+                  }`}
+                />
+              </button>
+            );
+          })()}
 
           {/* Firebase Auth & Cloud Sync Button */}
           <button

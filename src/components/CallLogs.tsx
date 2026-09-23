@@ -12,6 +12,7 @@ import {
   Clock,
   MapPin,
   CheckCircle,
+  FileText,
 } from 'lucide-react';
 import { CallLog, CallType } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
@@ -239,6 +240,13 @@ export const CallLogs: React.FC<CallLogsProps> = ({
                       </>
                     )}
                   </div>
+
+                  {log.note && (
+                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-amber-700 dark:text-amber-300/90 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-900/40 max-w-sm truncate">
+                      <FileText className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span className="truncate">{log.note}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -300,6 +308,17 @@ export const CallLogs: React.FC<CallLogsProps> = ({
                 <div className="flex justify-between py-1 border-b border-neutral-100 dark:border-neutral-800/60">
                   <span className="text-neutral-400">{t.location}:</span>
                   <span>{selectedLog.location}</span>
+                </div>
+              )}
+              {selectedLog.note && (
+                <div className="py-2 border-b border-neutral-100 dark:border-neutral-800/60">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>{t.callNotes || 'কল নোট (Room DB)'}:</span>
+                  </div>
+                  <p className="text-xs text-neutral-700 dark:text-neutral-300 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/40 p-2 rounded-lg whitespace-pre-wrap">
+                    {selectedLog.note}
+                  </p>
                 </div>
               )}
               {selectedLog.isSpam && (

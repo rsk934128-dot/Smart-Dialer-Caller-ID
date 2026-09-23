@@ -1,6 +1,7 @@
 import { roomDb, SmsMessageDbEntity } from '../database';
 import { SmsMessage, SmsThread } from '../../types';
 import { normalizePhone } from '../../data/mockData';
+import { classifySms } from '../../utils/smsClassifier';
 
 export function toSmsDbEntity(msg: SmsMessage): SmsMessageDbEntity {
   const norm = normalizePhone(msg.type === 'inbox' ? msg.senderPhone : msg.recipientPhone);
@@ -78,13 +79,20 @@ export class SmsDao {
       const unreadCount = msgs.filter((m) => m.type === 'inbox' && m.status === 'received').length;
       const contactPhone = lastMsg.type === 'inbox' ? lastMsg.senderPhone : lastMsg.recipientPhone;
       const contactName = lastMsg.type === 'inbox' ? lastMsg.senderName : lastMsg.recipientName;
+      const threadCategory =
+        lastMsg.category ||
+        classifySms(lastMsg.body, contactPhone, contactName).category;
 
       threads.push({
         threadId: key,
         contactPhone,
         contactName,
         simSlot: lastMsg.simSlot || 1,
-        lastMessage: lastMsg,
+        lastMessage: {
+          ...lastMsg,
+          category: lastMsg.category || threadCategory,
+        },
+        category: threadCategory,
         unreadCount,
         totalMessages: msgs.length,
       });

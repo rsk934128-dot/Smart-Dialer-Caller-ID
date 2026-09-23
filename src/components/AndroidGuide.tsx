@@ -31,7 +31,7 @@ export const AndroidGuide: React.FC<AndroidGuideProps> = ({ lang, onSimulateInco
   const t = TRANSLATIONS[lang];
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    'permissions_simulator' | 'manifest' | 'runtime_permissions' | 'rolemanager' | 'incallservice' | 'callerid_overlay' | 'callstate_receiver' | 'room_database' | 'architecture'
+    'permissions_simulator' | 'manifest' | 'runtime_permissions' | 'rolemanager' | 'incallservice' | 'callerid_overlay' | 'callstate_receiver' | 'room_database' | 'architecture' | 'pwabuilder'
   >('permissions_simulator');
 
   // Simulator state for Android permissions
@@ -986,6 +986,17 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
         >
           আর্কিটেকচার রোডম্যাপ
         </button>
+        <button
+          onClick={() => setActiveTab('pwabuilder')}
+          className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition flex items-center gap-1.5 ${
+            activeTab === 'pwabuilder'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+          }`}
+        >
+          <Smartphone className="w-3.5 h-3.5" />
+          <span>PWABuilder বাইপাস গাইড</span>
+        </button>
       </div>
 
       {/* 1. PERMISSIONS & ROLE SIMULATOR TAB */}
@@ -1578,6 +1589,86 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
               <code className="font-mono font-bold">READ_CALL_LOG</code> এবং{' '}
               <code className="font-mono font-bold">CALL_PHONE</code> অত্যন্ত সংবেদনশীল পারমিশন। গুগল প্লে স্টোর কেবলমাত্র সেই অ্যাপগুলোকেই এই পারমিশন দেয় যারা প্রকৃত অর্থেই ফোনের মূল ডিফল্ট ডায়ালার (Default Phone Handler) হিসেবে কাজ করে।
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* 9. PWABUILDER NO-STUDIO BYPASS TAB */}
+      {activeTab === 'pwabuilder' && (
+        <div className="space-y-4 animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
+              <Zap className="w-4 h-4" />
+              <span>PWABuilder: অ্যান্ড্রয়েড স্টুডিও ছাড়া ১-ক্লিকে APK তৈরি</span>
+            </div>
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+              মাইক্রোসফটের অফিশিয়াল ওপেন সোর্স ইঞ্জিন <strong>PWABuilder</strong> ব্যবহার করে কোনো ভারি অ্যান্ড্রয়েড স্টুডিও পিসিতে ইনস্টল ছাড়াই এই অ্যাপটিকে সরাসরি রেডিমেড <strong>Trusted Web Activity (TWA) Android APK</strong> তে রূপান্তর করা যায়।
+            </p>
+          </div>
+
+          {/* Quick Copy Link Card */}
+          <div className="p-4 rounded-2xl bg-neutral-900 text-white space-y-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-neutral-400 font-medium">PWABuilder অফিশিয়াল পোর্টাল</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">১০০% ফ্রি ক্লাউড বিল্ড</span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 flex items-center justify-between gap-2">
+              <code className="text-xs text-emerald-300 font-mono truncate">https://www.pwabuilder.com</code>
+              <button
+                onClick={() => copyToClipboard('https://www.pwabuilder.com', 'pwabuilder_url')}
+                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold flex items-center gap-1 transition shrink-0"
+              >
+                {copiedKey === 'pwabuilder_url' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>কপি লিঙ্ক</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Step by step guide */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-wider">
+              ধাপ অনুসারে APK তৈরির প্রক্রিয়া:
+            </h4>
+
+            <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0">১</span>
+                <h5 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">ওয়েবসাইট লিঙ্ক পেস্ট করুন</h5>
+              </div>
+              <p className="text-xs text-neutral-600 dark:text-neutral-300 pl-8 leading-relaxed">
+                <a href="https://www.pwabuilder.com" target="_blank" rel="noreferrer" className="text-emerald-600 dark:text-emerald-400 underline font-medium">pwabuilder.com</a> ভিজিট করে আপনার অ্যাপটির লাইভ URL ইনপুট বক্সে পেস্ট করে <strong>"Start"</strong> চাপুন।
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0">২</span>
+                <h5 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">PWA Manifest ও সার্ভিস ওয়ার্কার স্ক্যান</h5>
+              </div>
+              <p className="text-xs text-neutral-600 dark:text-neutral-300 pl-8 leading-relaxed">
+                PWABuilder আমাদের বিদ্যমান <code className="text-emerald-600 dark:text-emerald-400 font-mono">manifest.json</code>, অফলাইন Service Worker, আইকন ও শর্টকাটগুলো যাচাই করবে (আমাদের কোডবেস আগে থেকেই ১০০% PWA Ready স্কোর নিশ্চিত করা আছে)।
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0">৩</span>
+                <h5 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">"Package For Stores" বাটনে ক্লিক</h5>
+              </div>
+              <p className="text-xs text-neutral-600 dark:text-neutral-300 pl-8 leading-relaxed">
+                ফলাফল পেইজে <strong>Android</strong> অপশনের পাশে <strong>"Generate"</strong> বা <strong>"Package For Stores"</strong> বাটনে ক্লিক করুন।
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0">৪</span>
+                <h5 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">APK / AAB প্যাকেজ ডাউনলোড ও ফোনে ইন্সটল</h5>
+              </div>
+              <p className="text-xs text-neutral-600 dark:text-neutral-300 pl-8 leading-relaxed">
+                কয়েক সেকেন্ডের মধ্যে ক্লাউড থেকে আপনার <code className="font-mono text-emerald-600 dark:text-emerald-400">.apk</code> ফাইল ডাউনলোড হয়ে যাবে। ফাইলটি যেকোনো অ্যান্ড্রয়েড ফোনে পাঠিয়ে সরাসরি ক্লিক করলেই নেটিভ অ্যাপের মতো ইনস্টল হয়ে যাবে!
+              </p>
+            </div>
           </div>
         </div>
       )}

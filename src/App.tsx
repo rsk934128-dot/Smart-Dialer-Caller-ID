@@ -47,8 +47,20 @@ import { MessagesView } from './components/MessagesView';
 import { IncomingSmsBanner } from './components/IncomingSmsBanner';
 import { callPermissionService } from './services/callPermissionService';
 import { smsService } from './services/smsService';
+import { getInitialTheme, applyTheme, ThemeMode } from './utils/theme';
 
 export default function App() {
+  // System-wide Theme State (Light / Dark mode driven by CSS variables)
+  const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   // Localization
   const [lang, setLang] = useState<Language>(() => {
     return (localStorage.getItem('smart_dialer_lang') as Language) || 'bn';
@@ -62,8 +74,18 @@ export default function App() {
 
   // Default Call App Permissions State
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState<boolean>(false);
+  const [permissionModalTab, setPermissionModalTab] = useState<
+    'dialog' | 'permissions' | 'settings' | 'backup' | 'code'
+  >('dialog');
   const [isDefaultDialer, setIsDefaultDialer] = useState<boolean>(() => callPermissionService.isDefault());
   const [realCallToast, setRealCallToast] = useState<{ show: boolean; phone: string; name?: string } | null>(null);
+
+  const handleOpenPermissionModal = (
+    tab: 'dialog' | 'permissions' | 'settings' | 'backup' | 'code' = 'dialog'
+  ) => {
+    setPermissionModalTab(tab);
+    setIsPermissionModalOpen(true);
+  };
 
   // Tab State
   const [activeTab, setActiveTab] = useState<AppTab>('keypad');
@@ -95,9 +117,10 @@ export default function App() {
     try {
       const saved = localStorage.getItem('smart_dialer_contacts');
       if (!saved) return INITIAL_CONTACTS;
-      const parsed: Contact[] = JSON.parse(saved);
-      const existingIds = new Set(parsed.map((c) => c.id));
-      const merged = parsed.map((c) => {
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return INITIAL_CONTACTS;
+      const existingIds = new Set(parsed.map((c) => c?.id).filter(Boolean));
+      const merged = parsed.filter(Boolean).map((c) => {
         const init = INITIAL_CONTACTS.find((ic) => ic.id === c.id);
         if (init && !c.nameEn) {
           return { ...c, nameEn: init.nameEn };
@@ -118,7 +141,9 @@ export default function App() {
   const [callLogs, setCallLogs] = useState<CallLog[]>(() => {
     try {
       const saved = localStorage.getItem('smart_dialer_call_logs');
-      return saved ? JSON.parse(saved) : INITIAL_CALL_LOGS;
+      if (!saved) return INITIAL_CALL_LOGS;
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : INITIAL_CALL_LOGS;
     } catch {
       return INITIAL_CALL_LOGS;
     }
@@ -135,7 +160,9 @@ export default function App() {
   const [blockedPhones, setBlockedPhones] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('smart_dialer_blocked');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -407,6 +434,25 @@ export default function App() {
       audioStopFnRef.current = null;
     }
 
+    const isSpamProtectionOn = roomDbService.isSpamProtectionEnabled();
+    const isBlocked = blockedPhones.includes(caller.phone);
+    const isHighRiskSpam = isSpamProtectionOn && caller.spamScore >= 60;
+    const shouldSilence = isBlocked || isHighRiskSpam;
+
+    // Check if caller is a known contact with custom ringtone stored in Room DB
+    const callerDigits = caller.phone.replace(/[^\d]/g, '');
+    const matchedContact = contacts.find((c) => {
+      const contactDigits = c.phone.replace(/[^\d]/g, '');
+      return (
+        c.phone === caller.phone ||
+        (contactDigits.length >= 7 && callerDigits.endsWith(contactDigits.slice(-8))) ||
+        (callerDigits.length >= 7 && contactDigits.endsWith(callerDigits.slice(-8)))
+      );
+    });
+
+    const contactRingtoneId = matchedContact?.ringtone || 'chime';
+    const contactRingtoneLabel = matchedContact?.ringtoneLabel;
+
     const newCall: ActiveCall = {
       phone: caller.phone,
       name: caller.name,
@@ -419,13 +465,15 @@ export default function App() {
       isRecording: false,
       callerIdInfo: caller,
       uiMode: mode,
+      customRingtoneLabel: contactRingtoneLabel,
     };
 
     setActiveCall(newCall);
-    setIsSilenced(false);
+    setIsSilenced(shouldSilence);
 
-    if (soundEnabled) {
-      audioStopFnRef.current = playIncomingRingtone();
+    // Only ring if not silenced by spam protection or blocklist
+    if (soundEnabled && !shouldSilence) {
+      audioStopFnRef.current = playIncomingRingtone(contactRingtoneId);
     }
   };
 
@@ -485,6 +533,17 @@ export default function App() {
     if (activeCall) {
       const finalCall = { ...activeCall };
 
+      // Find matched contact from current contacts state
+      const finalDigits = finalCall.phone.replace(/[^\d]/g, '');
+      const callMatchedContact = contacts.find((c) => {
+        const contactDigits = c.phone.replace(/[^\d]/g, '');
+        return (
+          c.phone === finalCall.phone ||
+          (contactDigits.length >= 7 && finalDigits.endsWith(contactDigits.slice(-8))) ||
+          (finalDigits.length >= 7 && contactDigits.endsWith(finalDigits.slice(-8)))
+        );
+      });
+
       // Determine call log type
       let logType: CallLog['type'] = 'outgoing';
       if (finalCall.isIncoming) {
@@ -496,6 +555,7 @@ export default function App() {
       // Add to call log history
       const newLog: CallLog = {
         id: `log-${Date.now()}`,
+        contactId: callMatchedContact?.id,
         name: finalCall.name,
         phone: finalCall.phone,
         type: logType,
@@ -505,11 +565,24 @@ export default function App() {
         spamCategory: finalCall.callerIdInfo?.businessCategory,
         spamScore: finalCall.callerIdInfo?.spamScore,
         location: finalCall.callerIdInfo?.city,
+        note: finalCall.callNote?.trim() || undefined,
       };
 
       setCallLogs((prev) => [newLog, ...prev]);
       roomDbService.callLogs.insert(newLog).catch(console.error);
       cloudSyncService.saveCallLogToCloud(newLog).catch(console.error);
+
+      // If a note was entered and this caller is a known contact, also sync note to the contact in Room DB if contact has no note
+      if (finalCall.callNote?.trim() && callMatchedContact) {
+        const contactNoteToSave = callMatchedContact.note
+          ? `${callMatchedContact.note}\n[Call note: ${finalCall.callNote.trim()}]`
+          : finalCall.callNote.trim();
+        roomDbService.updateContactNote(callMatchedContact.id, contactNoteToSave).then((updated) => {
+          if (updated) {
+            setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+          }
+        }).catch(console.error);
+      }
 
       // Show ended state briefly
       setActiveCall((prev) => (prev ? { ...prev, state: 'ended' } : null));
@@ -537,6 +610,10 @@ export default function App() {
 
   const handleToggleRecord = () => {
     setActiveCall((prev) => (prev ? { ...prev, isRecording: !prev.isRecording } : null));
+  };
+
+  const handleUpdateCallNote = (note: string) => {
+    setActiveCall((prev) => (prev ? { ...prev, callNote: note } : null));
   };
 
   // Contacts Handlers with Room DB Persistence & Cloud Firestore
@@ -617,12 +694,12 @@ export default function App() {
   return (
     <div
       id="main-app-shell"
-      className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 flex flex-col items-center justify-between font-sans selection:bg-emerald-500 selection:text-white"
+      className="min-h-screen bg-[var(--color-bg-app)] text-[var(--color-text-primary)] flex flex-col items-center justify-between font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200"
     >
       {/* Mobile container centered frame */}
       <div
         id="phone-frame-wrapper"
-        className="w-full max-w-md bg-white dark:bg-neutral-900 shadow-2xl flex flex-col h-screen overflow-hidden border-x border-neutral-200 dark:border-neutral-800"
+        className="w-full max-w-md bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] shadow-2xl flex flex-col h-screen overflow-hidden border-x border-[var(--color-border)] transition-colors duration-200"
       >
         {/* Header */}
         <Header
@@ -636,7 +713,10 @@ export default function App() {
           onSimulateIncoming={handleSimulateIncoming}
           syncStatus={syncStatus}
           onOpenAuth={() => setIsAuthModalOpen(true)}
-          onOpenPermissionModal={() => setIsPermissionModalOpen(true)}
+          onOpenPermissionModal={() => handleOpenPermissionModal('dialog')}
+          onOpenBackup={() => handleOpenPermissionModal('backup')}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
         />
 
         {/* Default Phone App Permission Status Banner */}
@@ -754,7 +834,7 @@ export default function App() {
         {/* Bottom Navigation Bar */}
         <nav
           id="app-bottom-nav"
-          className="h-16 px-1 bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0 select-none z-10"
+          className="h-16 px-1 bg-[var(--color-nav-bg)] border-t border-[var(--color-border)] flex items-center justify-between shrink-0 select-none z-10 transition-colors duration-200"
         >
           {/* Keypad */}
           <button
@@ -887,19 +967,33 @@ export default function App() {
       {activeCall &&
         (!activeCall.isIncoming ||
           activeCall.state !== 'incoming' ||
-          activeCall.uiMode === 'fullscreen') && (
-          <ActiveCallModal
-            call={activeCall}
-            lang={lang}
-            onAnswer={handleAnswerCall}
-            onDecline={handleDeclineOrEndCall}
-            onToggleMute={handleToggleMute}
-            onToggleSpeaker={handleToggleSpeaker}
-            onToggleHold={handleToggleHold}
-            onToggleRecord={handleToggleRecord}
-            soundEnabled={soundEnabled}
-          />
-        )}
+          activeCall.uiMode === 'fullscreen') && (() => {
+          const activeDigits = activeCall.phone.replace(/[^\d]/g, '');
+          const matchedContactForActiveCall = contacts.find((c) => {
+            const contactDigits = c.phone.replace(/[^\d]/g, '');
+            return (
+              c.phone === activeCall.phone ||
+              (contactDigits.length >= 7 && activeDigits.endsWith(contactDigits.slice(-8))) ||
+              (activeDigits.length >= 7 && contactDigits.endsWith(activeDigits.slice(-8)))
+            );
+          });
+
+          return (
+            <ActiveCallModal
+              call={activeCall}
+              lang={lang}
+              matchedContact={matchedContactForActiveCall}
+              onAnswer={handleAnswerCall}
+              onDecline={handleDeclineOrEndCall}
+              onToggleMute={handleToggleMute}
+              onToggleSpeaker={handleToggleSpeaker}
+              onToggleHold={handleToggleHold}
+              onToggleRecord={handleToggleRecord}
+              onUpdateNote={handleUpdateCallNote}
+              soundEnabled={soundEnabled}
+            />
+          );
+        })()}
 
       {/* 3. Firebase Authentication & Cloud Sync Modal */}
       <AuthModal
@@ -907,6 +1001,7 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         lang={lang}
         syncStatus={syncStatus}
+        onOpenBackup={() => handleOpenPermissionModal('backup')}
       />
 
       {/* 4. Android Default Call App Permission Activation Modal */}
@@ -915,6 +1010,8 @@ export default function App() {
         onClose={() => setIsPermissionModalOpen(false)}
         lang={lang}
         onSimulateIncoming={handleSimulateIncoming}
+        initialTab={permissionModalTab}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
       />
     </div>
   );

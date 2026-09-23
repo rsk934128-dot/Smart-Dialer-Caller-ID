@@ -9,6 +9,9 @@ import {
   ShieldAlert,
   CardSim as SimCard,
   ExternalLink,
+  Tag,
+  Lock,
+  User,
 } from 'lucide-react';
 import { SmsMessage } from '../types';
 import { smsService } from '../services/smsService';
@@ -120,6 +123,30 @@ export const IncomingSmsBanner: React.FC<IncomingSmsBannerProps> = ({
                       <SimCard className="w-2.5 h-2.5" />
                       {activeMessage.simSlot === 2 ? 'SIM 2' : 'SIM 1'}
                     </span>
+                    {activeMessage.category === 'promotions' && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        <Tag className="w-2.5 h-2.5" />
+                        {isBn ? 'প্রমোশন' : 'Promotions'}
+                      </span>
+                    )}
+                    {activeMessage.category === 'otp' && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <Lock className="w-2.5 h-2.5" />
+                        {isBn ? 'ওটিপি' : 'OTP'}
+                      </span>
+                    )}
+                    {activeMessage.category === 'personal' && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        <User className="w-2.5 h-2.5" />
+                        {isBn ? 'ব্যক্তিগত' : 'Personal'}
+                      </span>
+                    )}
+                    {activeMessage.category === 'spam' && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                        <ShieldAlert className="w-2.5 h-2.5" />
+                        {isBn ? 'স্প্যাম' : 'Spam'}
+                      </span>
+                    )}
                     <span className="text-[10px] text-neutral-400">
                       • {isBn ? 'এইমাত্র' : 'Just now'}
                     </span>

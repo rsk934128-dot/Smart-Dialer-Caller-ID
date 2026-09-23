@@ -19,12 +19,15 @@ import {
   CheckCheck,
   AlertCircle,
   Settings,
+  Tag,
+  User,
 } from 'lucide-react';
-import { SmsMessage, SmsThread, Contact } from '../types';
+import { SmsMessage, SmsThread, Contact, SmsCategory } from '../types';
 import { smsService } from '../services/smsService';
 import { roomDbService } from '../db/roomDatabaseService';
 import { callPermissionService } from '../services/callPermissionService';
-import { Language } from '../utils/i18n';
+import { Language, TRANSLATIONS } from '../utils/i18n';
+import { classifySms } from '../utils/smsClassifier';
 
 interface MessagesViewProps {
   lang: Language;
@@ -34,6 +37,8 @@ interface MessagesViewProps {
   initialThreadPhone?: string | null;
 }
 
+export type CategoryFilterTab = 'all' | 'personal' | 'promotions' | 'otp' | 'spam';
+
 export const MessagesView: React.FC<MessagesViewProps> = ({
   lang,
   contacts,
@@ -42,13 +47,14 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   initialThreadPhone,
 }) => {
   const isBn = lang === 'bn';
+  const t = TRANSLATIONS[lang];
 
   // State
   const [threads, setThreads] = useState<SmsThread[]>([]);
   const [selectedThread, setSelectedThread] = useState<SmsThread | null>(null);
   const [threadMessages, setThreadMessages] = useState<SmsMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'otp' | 'personal' | 'spam'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterTab>('all');
   const [replyText, setReplyText] = useState('');
   const [sendSimSlot, setSendSimSlot] = useState<1 | 2>(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -208,6 +214,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     senderName: string;
     body: string;
     simSlot: 1 | 2;
+    category?: SmsCategory;
+    isOtp?: boolean;
     isSpam?: boolean;
   }) => {
     setIsSimulatorOpen(false);
@@ -216,31 +224,60 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
       senderName: preset.senderName,
       body: preset.body,
       simSlot: preset.simSlot,
+      category: preset.category,
       isSpam: preset.isSpam,
     });
     loadThreads();
   };
 
-  // Filter threads
+  /**
+   * Deterministic local classifier accessor for a thread
+   */
+  const getThreadCategory = (thread: SmsThread): SmsCategory => {
+    if (thread.category) return thread.category;
+    if (thread.lastMessage?.category) return thread.lastMessage.category;
+    return classifySms(
+      thread.lastMessage?.body || '',
+      thread.contactPhone,
+      thread.contactName
+    ).category;
+  };
+
+  // Compute message counts per categorized tab
+  const categoryCounts = useMemo(() => {
+    const counts: Record<CategoryFilterTab, number> = {
+      all: threads.length,
+      personal: 0,
+      promotions: 0,
+      otp: 0,
+      spam: 0,
+    };
+    threads.forEach((t) => {
+      const cat = getThreadCategory(t);
+      if (cat in counts) {
+        counts[cat]++;
+      }
+    });
+    return counts;
+  }, [threads]);
+
+  // Filter threads by search query and categorized tab
   const filteredThreads = useMemo(() => {
     return threads.filter((t) => {
       // Search
+      const query = searchQuery.trim().toLowerCase();
       const matchesSearch =
-        t.contactPhone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.contactName && t.contactName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        t.lastMessage.body.toLowerCase().includes(searchQuery.toLowerCase());
+        !query ||
+        t.contactPhone.toLowerCase().includes(query) ||
+        (t.contactName && t.contactName.toLowerCase().includes(query)) ||
+        t.lastMessage.body.toLowerCase().includes(query);
 
       if (!matchesSearch) return false;
 
-      // Category filter
-      if (categoryFilter === 'otp') {
-        return t.lastMessage.isOtp;
-      }
-      if (categoryFilter === 'spam') {
-        return t.lastMessage.isSpam;
-      }
-      if (categoryFilter === 'personal') {
-        return !t.lastMessage.isOtp && !t.lastMessage.isSpam;
+      // Category filter tab
+      if (categoryFilter !== 'all') {
+        const cat = getThreadCategory(t);
+        if (cat !== categoryFilter) return false;
       }
       return true;
     });
@@ -296,6 +333,39 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                     <SimCard className="w-2.5 h-2.5" />
                     {selectedThread.simSlot === 2 ? 'SIM 2' : 'SIM 1'}
                   </span>
+                  {(() => {
+                    const selCat = getThreadCategory(selectedThread);
+                    if (selCat === 'promotions') {
+                      return (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                          <Tag className="w-2.5 h-2.5" />
+                          {t.smsCategoryPromotions}
+                        </span>
+                      );
+                    }
+                    if (selCat === 'otp') {
+                      return (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
+                          <Lock className="w-2.5 h-2.5" />
+                          {t.smsCategoryOtp}
+                        </span>
+                      );
+                    }
+                    if (selCat === 'spam') {
+                      return (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">
+                          <ShieldAlert className="w-2.5 h-2.5" />
+                          {t.smsCategorySpam}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                        <User className="w-2.5 h-2.5" />
+                        {t.smsCategoryPersonal}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono truncate">
                   {selectedThread.contactPhone}
@@ -579,53 +649,116 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               />
             </div>
 
-            {/* Filter Category Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+            {/* Filter Category Chips with Auto-Categorization */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5 pb-0.5">
               <button
+                id="sms-filter-all"
                 onClick={() => setCategoryFilter('all')}
-                className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
+                className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all ${
                   categoryFilter === 'all'
                     ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-2xs'
-                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
                 }`}
               >
-                {isBn ? 'সকল' : 'All'} ({threads.length})
+                <MessageSquare className="w-3 h-3" />
+                <span>{t.smsCategoryAll}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                    categoryFilter === 'all'
+                      ? 'bg-neutral-700 text-white dark:bg-neutral-300 dark:text-neutral-900'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300'
+                  }`}
+                >
+                  {categoryCounts.all}
+                </span>
               </button>
 
               <button
+                id="sms-filter-personal"
+                onClick={() => setCategoryFilter('personal')}
+                className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all ${
+                  categoryFilter === 'personal'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                }`}
+              >
+                <User className="w-3 h-3" />
+                <span>{t.smsCategoryPersonal}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                    categoryFilter === 'personal'
+                      ? 'bg-blue-700 text-white'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300'
+                  }`}
+                >
+                  {categoryCounts.personal}
+                </span>
+              </button>
+
+              <button
+                id="sms-filter-promotions"
+                onClick={() => setCategoryFilter('promotions')}
+                className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all ${
+                  categoryFilter === 'promotions'
+                    ? 'bg-purple-600 text-white shadow-2xs'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                }`}
+              >
+                <Tag className="w-3 h-3" />
+                <span>{t.smsCategoryPromotions}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                    categoryFilter === 'promotions'
+                      ? 'bg-purple-700 text-white'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300'
+                  }`}
+                >
+                  {categoryCounts.promotions}
+                </span>
+              </button>
+
+              <button
+                id="sms-filter-otp"
                 onClick={() => setCategoryFilter('otp')}
-                className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition ${
+                className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all ${
                   categoryFilter === 'otp'
                     ? 'bg-amber-600 text-white shadow-2xs'
-                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
                 }`}
               >
                 <Lock className="w-3 h-3" />
-                <span>{isBn ? 'ওটিপি কোড' : 'OTPs'}</span>
+                <span>{t.smsCategoryOtp}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                    categoryFilter === 'otp'
+                      ? 'bg-amber-700 text-white'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300'
+                  }`}
+                >
+                  {categoryCounts.otp}
+                </span>
               </button>
 
               <button
-                onClick={() => setCategoryFilter('personal')}
-                className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition ${
-                  categoryFilter === 'personal'
-                    ? 'bg-emerald-600 text-white shadow-2xs'
-                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
-                }`}
-              >
-                <Smartphone className="w-3 h-3" />
-                <span>{isBn ? 'ব্যক্তিগত' : 'Personal'}</span>
-              </button>
-
-              <button
+                id="sms-filter-spam"
                 onClick={() => setCategoryFilter('spam')}
-                className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition ${
+                className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all ${
                   categoryFilter === 'spam'
                     ? 'bg-rose-600 text-white shadow-2xs'
-                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
                 }`}
               >
                 <ShieldAlert className="w-3 h-3" />
-                <span>{isBn ? 'স্প্যাম' : 'Spam'}</span>
+                <span>{t.smsCategorySpam}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                    categoryFilter === 'spam'
+                      ? 'bg-rose-700 text-white'
+                      : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300'
+                  }`}
+                >
+                  {categoryCounts.spam}
+                </span>
               </button>
             </div>
           </div>
@@ -633,19 +766,42 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           {/* Threads List */}
           <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-800/60">
             {filteredThreads.length === 0 ? (
-              <div className="text-center py-16 text-neutral-400 text-sm space-y-2">
-                <MessageSquare className="w-10 h-10 mx-auto opacity-40 text-neutral-400" />
-                <p>{isBn ? 'কোনো মেসেজ পাওয়া যায়নি' : 'No messages found'}</p>
+              <div className="text-center py-16 text-neutral-400 text-sm space-y-2 px-4">
+                <div className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center bg-neutral-100 dark:bg-neutral-800">
+                  {categoryFilter === 'promotions' ? (
+                    <Tag className="w-6 h-6 text-purple-500" />
+                  ) : categoryFilter === 'otp' ? (
+                    <Lock className="w-6 h-6 text-amber-500" />
+                  ) : categoryFilter === 'spam' ? (
+                    <ShieldAlert className="w-6 h-6 text-rose-500" />
+                  ) : categoryFilter === 'personal' ? (
+                    <User className="w-6 h-6 text-blue-500" />
+                  ) : (
+                    <MessageSquare className="w-6 h-6 opacity-40 text-neutral-400" />
+                  )}
+                </div>
+                <p className="font-semibold text-neutral-800 dark:text-neutral-200">
+                  {categoryFilter === 'all'
+                    ? (isBn ? 'কোনো মেসেজ পাওয়া যায়নি' : 'No messages found')
+                    : t.smsEmptyCategory}
+                </p>
+                <p className="text-xs text-neutral-500 max-w-xs mx-auto">
+                  {isBn
+                    ? 'স্মার্ট লোকাল ক্লাসিফায়ার নতুন ইনকামিং এসএমএস স্বয়ংক্রিয়ভাবে প্রমোশন, ওটিপি, ব্যক্তিগত বা স্প্যামে ফিল্টার করবে।'
+                    : 'Smart local classification automatically filters incoming SMS into Promotions, OTPs, Personal, and Spam.'}
+                </p>
                 <button
                   onClick={() => setIsSimulatorOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 text-xs font-semibold"
+                  className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100 transition"
                 >
-                  {isBn ? 'একটি টেস্ট মেসেজ রিসিভ করুন' : 'Simulate incoming test SMS'}
+                  {isBn ? 'টেস্ট মেসেজ রিসিভ করুন' : 'Simulate incoming test SMS'}
                 </button>
               </div>
             ) : (
               filteredThreads.map((thread) => {
                 const hasUnread = thread.unreadCount > 0;
+                const cat = getThreadCategory(thread);
+
                 return (
                   <div
                     key={thread.threadId}
@@ -655,20 +811,24 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       hasUnread ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''
                     }`}
                   >
-                    {/* Avatar */}
+                    {/* Avatar with Category Indicator */}
                     <div
                       className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs ${
-                        thread.lastMessage.isSpam
+                        cat === 'spam'
                           ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                          : thread.lastMessage.isOtp
+                          : cat === 'otp'
                           ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                          : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200'
+                          : cat === 'promotions'
+                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
                       }`}
                     >
-                      {thread.lastMessage.isSpam ? (
+                      {cat === 'spam' ? (
                         <ShieldAlert className="w-5 h-5" />
-                      ) : thread.lastMessage.isOtp ? (
+                      ) : cat === 'otp' ? (
                         <Lock className="w-5 h-5" />
+                      ) : cat === 'promotions' ? (
+                        <Tag className="w-5 h-5" />
                       ) : (
                         (thread.contactName || thread.contactPhone).charAt(0)
                       )}
@@ -716,17 +876,33 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       </p>
 
                       {/* Badges / Chips under message */}
-                      <div className="mt-1 flex items-center gap-1.5">
-                        {thread.lastMessage.isOtp && thread.lastMessage.otpCode && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                            OTP: {thread.lastMessage.otpCode}
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        {/* Auto-categorized badge */}
+                        {cat === 'promotions' && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                            <Tag className="w-2.5 h-2.5" />
+                            {t.smsCategoryPromotions}
                           </span>
                         )}
-                        {thread.lastMessage.isSpam && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
-                            {isBn ? 'স্প্যাম' : 'Spam'}
+                        {cat === 'otp' && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-mono">
+                            <Lock className="w-2.5 h-2.5" />
+                            {thread.lastMessage.otpCode ? `OTP: ${thread.lastMessage.otpCode}` : t.smsCategoryOtp}
                           </span>
                         )}
+                        {cat === 'spam' && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
+                            <ShieldAlert className="w-2.5 h-2.5" />
+                            {t.smsCategorySpam}
+                          </span>
+                        )}
+                        {cat === 'personal' && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                            <User className="w-2.5 h-2.5" />
+                            {t.smsCategoryPersonal}
+                          </span>
+                        )}
+
                         {hasUnread && (
                           <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-600 text-white ml-auto">
                             {thread.unreadCount} {isBn ? 'নতুন' : 'new'}
@@ -776,9 +952,35 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   className="w-full text-left p-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:border-blue-500 bg-neutral-50 dark:bg-neutral-800/60 hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition group"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 group-hover:text-blue-600">
-                      {preset.titleBn}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 group-hover:text-blue-600">
+                        {preset.titleBn}
+                      </span>
+                      {preset.category === 'promotions' && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[8px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                          <Tag className="w-2.5 h-2.5" />
+                          {t.smsCategoryPromotions}
+                        </span>
+                      )}
+                      {preset.category === 'otp' && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[8px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
+                          <Lock className="w-2.5 h-2.5" />
+                          {t.smsCategoryOtp}
+                        </span>
+                      )}
+                      {preset.category === 'personal' && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[8px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                          <User className="w-2.5 h-2.5" />
+                          {t.smsCategoryPersonal}
+                        </span>
+                      )}
+                      {preset.category === 'spam' && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[8px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">
+                          <ShieldAlert className="w-2.5 h-2.5" />
+                          {t.smsCategorySpam}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-neutral-400 font-mono">
                       {preset.sender}
                     </span>
@@ -821,15 +1023,49 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-700"
               />
 
+              {/* Live Classification Result Preview */}
+              {(() => {
+                const liveRes = classifySms(customSimBody, customSimSender);
+                return (
+                  <div className="p-2 rounded-xl bg-neutral-50 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                      <span className="text-neutral-600 dark:text-neutral-400 font-medium">
+                        {isBn ? 'স্বয়ংক্রিয় ক্লাসিফিকেশন:' : 'Auto-Classification:'}
+                      </span>
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                        liveRes.category === 'promotions'
+                          ? 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300'
+                          : liveRes.category === 'otp'
+                          ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
+                          : liveRes.category === 'spam'
+                          ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                          : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                      }`}
+                    >
+                      {liveRes.category === 'promotions' && <Tag className="w-3 h-3" />}
+                      {liveRes.category === 'otp' && <Lock className="w-3 h-3" />}
+                      {liveRes.category === 'spam' && <ShieldAlert className="w-3 h-3" />}
+                      {liveRes.category === 'personal' && <User className="w-3 h-3" />}
+                      {liveRes.category.toUpperCase()} ({Math.round(liveRes.confidence * 100)}%)
+                    </span>
+                  </div>
+                );
+              })()}
+
               <button
-                onClick={() =>
+                onClick={() => {
+                  const liveRes = classifySms(customSimBody, customSimSender);
                   handleTriggerSimulation({
                     sender: customSimSender || 'Google',
                     senderName: customSimSender,
                     body: customSimBody || 'Test SMS',
                     simSlot: customSimSlot,
-                  })
-                }
+                    category: liveRes.category,
+                  });
+                }}
                 className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-sm active:scale-95"
               >
                 {isBn ? 'মেসেজটি এখন রিসিভ করুন (Receive Now)' : 'Receive SMS Now'}

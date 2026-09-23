@@ -1,10 +1,53 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --color-bg-app: #f1f5f9;
+  --color-bg-surface: #ffffff;
+  --color-bg-surface-subtle: #f8fafc;
+  --color-bg-surface-elevated: #ffffff;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+  --color-header-bg: rgba(255, 255, 255, 0.92);
+  --color-nav-bg: #ffffff;
+  --color-card-bg: #ffffff;
+  --color-accent: #059669;
+  --color-accent-subtle: #ecfdf5;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"],
+:root.dark,
+.dark {
+  --color-bg-app: #0a0a0a;
+  --color-bg-surface: #171717;
+  --color-bg-surface-subtle: #262626;
+  --color-bg-surface-elevated: #262626;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #64748b;
+  --color-border: #262626;
+  --color-border-subtle: #1e293b;
+  --color-header-bg: rgba(23, 23, 23, 0.92);
+  --color-nav-bg: #171717;
+  --color-card-bg: #1e1e1e;
+  --color-accent: #10b981;
+  --color-accent-subtle: rgba(16, 185, 129, 0.15);
+  color-scheme: dark;
+}
+
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', 'Hind Siliguri', system-ui, -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
+    background-color: var(--color-bg-app);
+    color: var(--color-text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
   
   input, textarea, pre, code {

@@ -14,12 +14,14 @@ import {
   CardSim as SimCard,
   Smartphone,
   ShieldCheck,
+  Music,
 } from 'lucide-react';
 import { Contact, CallLog } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
 import { searchContactsT9 } from '../utils/t9';
 import { ContactDetailSheet } from './ContactDetailSheet';
 import { SimContactsManagerModal } from './SimContactsManagerModal';
+import { GoogleContactsModal } from './GoogleContactsModal';
 import { callPermissionService } from '../services/callPermissionService';
 
 interface ContactsViewProps {
@@ -49,6 +51,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
   const [storageFilter, setStorageFilter] = useState<'all' | 'device' | 'sim1' | 'sim2'>('all');
   const [selectedDetailContact, setSelectedDetailContact] = useState<Contact | null>(null);
 
@@ -61,6 +64,8 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   const [formTag, setFormTag] = useState('Friend');
   const [formNote, setFormNote] = useState('');
   const [formStorageLocation, setFormStorageLocation] = useState<'device' | 'sim1' | 'sim2'>('device');
+  const [formRingtone, setFormRingtone] = useState<string>('chime');
+  const [formRingtoneLabel, setFormRingtoneLabel] = useState<string>('');
 
   const openNewModal = () => {
     setFormName('');
@@ -71,6 +76,8 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
     setFormTag('Friend');
     setFormNote('');
     setFormStorageLocation('device');
+    setFormRingtone('chime');
+    setFormRingtoneLabel('');
     setEditingContact(null);
     setIsNewModalOpen(true);
   };
@@ -84,6 +91,8 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
     setFormTag(c.tag || 'Friend');
     setFormNote(c.note || '');
     setFormStorageLocation(c.storageLocation || 'device');
+    setFormRingtone(c.ringtone || 'chime');
+    setFormRingtoneLabel(c.ringtoneLabel || '');
     setEditingContact(c);
     setIsNewModalOpen(true);
   };
@@ -104,6 +113,8 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
       isFavorite: editingContact ? editingContact.isFavorite : false,
       storageLocation: formStorageLocation,
       simSlot: formStorageLocation === 'sim1' ? 1 : formStorageLocation === 'sim2' ? 2 : undefined,
+      ringtone: formRingtone || (editingContact ? editingContact.ringtone : undefined),
+      ringtoneLabel: formRingtoneLabel.trim() || (editingContact ? editingContact.ringtoneLabel : undefined),
     };
 
     onSaveContact(newOrUpdated);
@@ -239,16 +250,31 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
             </button>
           </div>
 
-          {/* SIM Card Manager & Permission Button (Primary User Request) */}
-          <button
-            id="open-sim-contacts-manager-btn"
-            onClick={() => setIsSimModalOpen(true)}
-            className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-2xs hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition active:scale-95 shrink-0"
-            title={isBn ? 'সিমের নম্বরগুলো দেখুন ও পারমিশন অন করুন' : 'View SIM numbers & manage permissions'}
-          >
-            <SimCard className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{isBn ? 'সিমের নম্বর ও পারমিশন' : 'SIM Contacts & Perms'}</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Google Contacts People API Integration Button */}
+            <button
+              id="open-google-contacts-btn"
+              onClick={() => setIsGoogleModalOpen(true)}
+              className="px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center gap-1.5 shadow-2xs hover:bg-blue-100 dark:hover:bg-blue-900/60 transition active:scale-95 shrink-0"
+              title={isBn ? 'গুগল কন্টাক্টস সিঙ্ক ও ইমপোর্ট করুন' : 'Sync Google Contacts via People API'}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+              </svg>
+              <span>{isBn ? 'Google কন্টাক্টস' : 'Google Contacts'}</span>
+            </button>
+
+            {/* SIM Card Manager & Permission Button (Primary User Request) */}
+            <button
+              id="open-sim-contacts-manager-btn"
+              onClick={() => setIsSimModalOpen(true)}
+              className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-2xs hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition active:scale-95 shrink-0"
+              title={isBn ? 'সিমের নম্বরগুলো দেখুন ও পারমিশন অন করুন' : 'View SIM numbers & manage permissions'}
+            >
+              <SimCard className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{isBn ? 'সিমের নম্বর ও পারমিশন' : 'SIM Contacts & Perms'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -301,6 +327,12 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                         {c.tag && (
                           <span className="px-1.5 py-0.2 rounded text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
                             {c.tag}
+                          </span>
+                        )}
+                        {c.ringtoneLabel && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-medium bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                            <Music className="w-2.5 h-2.5" />
+                            {c.ringtoneLabel}
                           </span>
                         )}
                       </div>
@@ -392,6 +424,12 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                       {c.company && (
                         <span className="text-[11px] text-neutral-400 truncate hidden sm:inline">
                           • {c.company}
+                        </span>
+                      )}
+                      {c.ringtoneLabel && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-medium bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                          <Music className="w-2.5 h-2.5" />
+                          {c.ringtoneLabel}
                         </span>
                       )}
                     </div>
@@ -641,6 +679,10 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
             prev && prev.id === id ? { ...prev, isFavorite: !prev.isFavorite } : prev
           );
         }}
+        onUpdateContact={(updated) => {
+          setSelectedDetailContact(updated);
+          onSaveContact(updated);
+        }}
       />
 
       {/* SIM Card Contacts & Permissions Modal (User Request) */}
@@ -657,6 +699,21 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
           }
         }}
         onInitiateCall={onInitiateCall}
+      />
+
+      {/* Google Contacts People API Integration Modal */}
+      <GoogleContactsModal
+        isOpen={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        lang={lang}
+        existingContacts={contacts}
+        onImportContacts={(imported) => {
+          if (onImportContacts) {
+            onImportContacts(imported);
+          } else {
+            imported.forEach((c) => onSaveContact(c));
+          }
+        }}
       />
     </div>
   );

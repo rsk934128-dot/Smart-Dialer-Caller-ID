@@ -9,7 +9,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
-import { Contact, CallLog } from '../types';
+import { Contact, CallLog, BackupMetadata } from '../types';
 import { roomDbService } from '../db/roomDatabaseService';
 
 export interface CloudSyncStatus {
@@ -41,6 +41,40 @@ class CloudSyncService {
 
   constructor() {
     this.initAuthListener();
+    // Load last backup timestamp from Room DB metadata
+    this.loadInitialBackupStatus();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          this.handleUserSignIn(currentUser);
+        }
+      });
+      window.addEventListener('offline', () => {
+        this.updateStatus({
+          isCloudConnected: false,
+          error: 'ডিভাইস বর্তমানে অফলাইনে রয়েছে',
+        });
+      });
+    }
+  }
+
+  private async loadInitialBackupStatus() {
+    try {
+      const backupInfo = await roomDbService.getLastBackupInfo();
+      if (backupInfo && backupInfo.timestamp) {
+        const parsedDate = new Date(backupInfo.timestamp);
+        const validDate = isNaN(parsedDate.getTime()) ? null : parsedDate;
+        this.updateStatus({
+          lastSyncedAt: validDate,
+          syncedContactsCount: backupInfo.contactsCount || 0,
+          syncedLogsCount: backupInfo.callLogsCount || 0,
+          syncedBlockedCount: backupInfo.blockedCount || 0,
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
   }
 
   public subscribe(listener: SyncStatusListener): () => void {
@@ -104,6 +138,16 @@ class CloudSyncService {
   private async handleUserSignIn(user: User) {
     this.updateStatus({ isSyncing: true, error: null });
     this.cleanupListeners();
+
+    // If offline, do not attempt to contact Firestore backend
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      this.updateStatus({
+        isSyncing: false,
+        isCloudConnected: false,
+        error: 'ইন্টারনেট সংযোগ নেই - লোকাল রুম ডাটাবেজ সক্রিয় রয়েছে',
+      });
+      return;
+    }
 
     try {
       const contactsRef = collection(db, 'users', user.uid, 'contacts');
@@ -169,6 +213,11 @@ class CloudSyncService {
           });
         },
         (err) => {
+          const errCode = (err as any)?.code || '';
+          if (errCode === 'unavailable' || err.message?.includes('offline')) {
+            console.warn('Firestore offline; local Room DB serving contacts.');
+            return;
+          }
           handleFirestoreError(err, OperationType.GET, `users/${user.uid}/contacts`);
         }
       );
@@ -184,6 +233,11 @@ class CloudSyncService {
           });
         },
         (err) => {
+          const errCode = (err as any)?.code || '';
+          if (errCode === 'unavailable' || err.message?.includes('offline')) {
+            console.warn('Firestore offline; local Room DB serving call logs.');
+            return;
+          }
           handleFirestoreError(err, OperationType.GET, `users/${user.uid}/call_logs`);
         }
       );
@@ -197,11 +251,26 @@ class CloudSyncService {
         syncedBlockedCount: cloudBlocked.length,
       });
     } catch (err: unknown) {
-      console.error('Error synchronizing with Firestore:', err);
-      this.updateStatus({
-        isSyncing: false,
-        error: err instanceof Error ? err.message : 'সিঙ্ক করার সময় সমস্যা হয়েছে',
-      });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isOfflineErr =
+        errMsg.toLowerCase().includes('unavailable') ||
+        errMsg.toLowerCase().includes('offline') ||
+        errMsg.toLowerCase().includes('failed to get document');
+
+      if (isOfflineErr) {
+        console.warn('Firestore backend unavailable. Local Room DB active.');
+        this.updateStatus({
+          isSyncing: false,
+          isCloudConnected: false,
+          error: null, // Don't show scary error to user, local Room DB operates seamlessly
+        });
+      } else {
+        console.error('Error synchronizing with Firestore:', err);
+        this.updateStatus({
+          isSyncing: false,
+          error: errMsg || 'সিঙ্ক করার সময় সমস্যা হয়েছে',
+        });
+      }
     }
   }
 
@@ -268,6 +337,7 @@ class CloudSyncService {
         isSpam: !!log.isSpam,
         spamScore: log.spamScore || 0,
         spamCategory: log.spamCategory || '',
+        note: log.note || '',
         simSlot: 1,
         isRecorded: false,
       });
@@ -315,43 +385,98 @@ class CloudSyncService {
   }
 
   /**
-   * Push all local Room DB data to Firestore on demand
+   * Push all local Room DB data to Firestore on demand, triggering full sync
    */
-  public async syncAllLocalDataToCloud(): Promise<void> {
+  public async syncAllLocalDataToCloud(
+    onProgress?: (step: string, percent: number) => void
+  ): Promise<BackupMetadata> {
     const uid = auth.currentUser?.uid;
-    if (!uid) throw new Error('ইউজার লগইন করা নেই');
+    if (!uid) {
+      throw new Error('কোনো অ্যাকাউন্ট লগইন করা নেই। অনুগ্রহ করে গুগল বা ইমেইল দিয়ে সাইন ইন করুন।');
+    }
 
-    this.updateStatus({ isSyncing: true });
+    this.updateStatus({ isSyncing: true, error: null });
+    onProgress?.('রুম ডিবি ডাটাবেজ থেকে ডাটা লোড করা হচ্ছে...', 10);
+
     try {
-      const [localContacts, localLogs, localBlocked] = await Promise.all([
+      const [localContacts, localLogs, localBlocked, localMessages] = await Promise.all([
         roomDbService.contacts.getAll(),
         roomDbService.callLogs.getAll(),
         roomDbService.getBlockedNumbers(),
+        roomDbService.messages.getAll(),
       ]);
 
+      onProgress?.(`কন্টাক্টস সিঙ্ক হচ্ছে (${localContacts.length} টি)...`, 30);
       for (const c of localContacts) {
         await this.saveContactToCloud(c, uid);
       }
 
+      onProgress?.(`কল হিস্টোরি সিঙ্ক হচ্ছে (${localLogs.length} টি)...`, 60);
       for (const l of localLogs) {
         await this.saveCallLogToCloud(l, uid);
       }
 
+      onProgress?.(`ব্লক লিস্ট সিঙ্ক হচ্ছে (${localBlocked.length} টি)...`, 80);
       for (const b of localBlocked) {
         await this.saveBlockedNumberToCloud(b);
       }
 
+      onProgress?.('ব্যাকআপ মেটাডাটা রুম ডিবি ও ফায়ারস্টোরে সংরক্ষণ করা হচ্ছে...', 92);
+
+      const backupMeta: BackupMetadata = {
+        timestamp: new Date().toISOString(),
+        contactsCount: localContacts.length,
+        callLogsCount: localLogs.length,
+        blockedCount: localBlocked.length,
+        messagesCount: localMessages.length,
+        totalEntities: localContacts.length + localLogs.length + localBlocked.length,
+        userId: uid,
+        userEmail: auth.currentUser?.email || '',
+        source: 'room_to_firestore',
+        status: 'success',
+      };
+
+      // 1. Record in Room DB dbMetadata & localStorage
+      await roomDbService.recordSuccessfulBackup(backupMeta);
+
+      // 2. Record in user's profile doc in Firestore
+      try {
+        await setDoc(
+          doc(db, 'users', uid),
+          {
+            lastBackupAt: backupMeta.timestamp,
+            lastBackupStats: {
+              contactsCount: backupMeta.contactsCount,
+              callLogsCount: backupMeta.callLogsCount,
+              blockedCount: backupMeta.blockedCount,
+              messagesCount: backupMeta.messagesCount,
+              totalEntities: backupMeta.totalEntities,
+            },
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch (profileErr) {
+        console.warn('Could not update user doc with backup stats:', profileErr);
+      }
+
+      onProgress?.('ব্যাকআপ সফলভাবে সম্পন্ন হয়েছে!', 100);
+
       this.updateStatus({
         isSyncing: false,
-        lastSyncedAt: new Date(),
+        lastSyncedAt: new Date(backupMeta.timestamp),
         syncedContactsCount: localContacts.length,
         syncedLogsCount: localLogs.length,
         syncedBlockedCount: localBlocked.length,
+        error: null,
       });
+
+      return backupMeta;
     } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'সিঙ্ক ব্যর্থ হয়েছে';
       this.updateStatus({
         isSyncing: false,
-        error: err instanceof Error ? err.message : 'সিঙ্ক ব্যর্থ হয়েছে',
+        error: errMsg,
       });
       throw err;
     }

@@ -30,6 +30,7 @@ import {
   Save,
   MessageSquare,
   CardSim as SimCard,
+  Database,
 } from 'lucide-react';
 import { Language } from '../utils/i18n';
 import {
@@ -38,12 +39,15 @@ import {
   CallMode,
 } from '../services/callPermissionService';
 import { CallerIdRecord } from '../types';
+import { BackupSyncView } from './BackupSyncView';
 
 interface DefaultCallPermissionModalProps {
   isOpen: boolean;
   onClose: () => void;
   lang: Language;
   onSimulateIncoming?: (caller: CallerIdRecord, mode?: 'fullscreen' | 'overlay') => void;
+  initialTab?: 'dialog' | 'permissions' | 'settings' | 'backup' | 'code';
+  onOpenAuth?: () => void;
 }
 
 export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProps> = ({
@@ -51,6 +55,8 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
   onClose,
   lang,
   onSimulateIncoming,
+  initialTab,
+  onOpenAuth,
 }) => {
   const [permissions, setPermissions] = useState<CallPermissions>(() =>
     callPermissionService.getPermissions()
@@ -67,7 +73,9 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
   );
   const [selectedSimDialer, setSelectedSimDialer] = useState<'smart_dialer' | 'system_phone'>('smart_dialer');
   const [isActivatingAll, setIsActivatingAll] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dialog' | 'permissions' | 'settings' | 'code'>('dialog');
+  const [activeTab, setActiveTab] = useState<'dialog' | 'permissions' | 'settings' | 'backup' | 'code'>(
+    initialTab || 'dialog'
+  );
   const [micTesting, setMicTesting] = useState(false);
   const [micSuccess, setMicSuccess] = useState<boolean | null>(null);
 
@@ -80,12 +88,15 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
 
   useEffect(() => {
     if (isOpen) {
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
       setPermissions(callPermissionService.getPermissions());
       setIsDefault(callPermissionService.isDefault());
       setIsDefaultSms(callPermissionService.isDefaultSms());
       setCallMode(callPermissionService.getCallMode());
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   if (!isOpen) return null;
 
@@ -257,6 +268,19 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
           >
             <SettingsIcon className="w-3.5 h-3.5" />
             <span>{isBn ? 'ডিফল্ট সেটিংস গাইড' : 'Keep Active Guide'}</span>
+          </button>
+
+          <button
+            id="tab-btn-backup"
+            onClick={() => setActiveTab('backup')}
+            className={`pb-2 text-xs font-semibold px-2.5 border-b-2 whitespace-nowrap transition flex items-center gap-1.5 ${
+              activeTab === 'backup'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                : 'border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>{isBn ? 'রুম ডিবি ব্যাকআপ' : 'Backup & Sync'}</span>
           </button>
 
           <button
@@ -1174,6 +1198,15 @@ startActivity(callIntent)`}
                 </code>
               </div>
             </div>
+          )}
+
+          {/* TAB 5: Room DB to Firestore Cloud Backup */}
+          {activeTab === 'backup' && (
+            <BackupSyncView
+              lang={lang}
+              onOpenAuth={onOpenAuth}
+              onCloseModal={onClose}
+            />
           )}
         </div>
 

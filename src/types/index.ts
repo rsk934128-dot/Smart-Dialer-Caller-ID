@@ -11,6 +11,8 @@ export interface Contact {
   tag?: string;
   storageLocation?: 'device' | 'sim1' | 'sim2';
   simSlot?: 1 | 2;
+  ringtone?: string;
+  ringtoneLabel?: string;
 }
 
 export type CallType = 'incoming' | 'outgoing' | 'missed' | 'rejected';
@@ -27,6 +29,7 @@ export interface CallLog {
   spamCategory?: string;
   spamScore?: number; // 0 to 100
   location?: string;
+  note?: string; // Call note stored in Room DB
 }
 
 export interface CallerIdRecord {
@@ -39,6 +42,26 @@ export interface CallerIdRecord {
   country?: string;
   verified: boolean;
   notes?: string;
+  carrier?: string;
+  trustLevel?: 'high' | 'medium' | 'low' | 'suspicious';
+  isGeminiAnalyzed?: boolean;
+}
+
+export interface GeminiCallerIdMetadata {
+  phone: string;
+  name: string;
+  businessCategory: string;
+  carrier: string;
+  spamScore: number;
+  spamReports: number;
+  city: string;
+  country: string;
+  verified: boolean;
+  notes: string;
+  trustLevel: 'high' | 'medium' | 'low' | 'suspicious';
+  suggestedAction: 'safe_to_answer' | 'verify_identity' | 'block_and_report' | 'telemarketing';
+  source?: string;
+  analyzedAt?: number;
 }
 
 export type CallSessionState = 'idle' | 'incoming' | 'outgoing' | 'connected' | 'ended';
@@ -58,6 +81,8 @@ export interface ActiveCall {
   isRecording: boolean;
   callerIdInfo?: CallerIdRecord;
   uiMode?: IncomingCallUIMode;
+  customRingtoneLabel?: string;
+  callNote?: string;
 }
 
 export interface DialerSettings {
@@ -72,6 +97,7 @@ export type AppTab = 'keypad' | 'recents' | 'contacts' | 'messages' | 'callerid'
 
 export type SmsType = 'inbox' | 'sent' | 'draft' | 'failed';
 export type SmsStatus = 'received' | 'read' | 'delivered' | 'sending' | 'failed';
+export type SmsCategory = 'personal' | 'promotions' | 'otp' | 'spam';
 
 export interface SmsMessage {
   id: string;
@@ -87,6 +113,7 @@ export interface SmsMessage {
   isOtp?: boolean;
   otpCode?: string;
   isSpam?: boolean;
+  category?: SmsCategory;
   isOfflineStored?: boolean;
 }
 
@@ -96,6 +123,7 @@ export interface SmsThread {
   contactName?: string;
   simSlot: 1 | 2;
   lastMessage: SmsMessage;
+  category?: SmsCategory;
   unreadCount: number;
   totalMessages: number;
 }
@@ -120,4 +148,17 @@ export interface RoomDbMetrics {
   messagesCount?: number;
   isInitialized: boolean;
   lastLookupTimeMs?: number;
+}
+
+export interface BackupMetadata {
+  timestamp: string;
+  contactsCount: number;
+  callLogsCount: number;
+  blockedCount: number;
+  messagesCount: number;
+  totalEntities: number;
+  userId?: string;
+  userEmail?: string;
+  source: 'room_to_firestore';
+  status: 'success' | 'failed' | 'in_progress';
 }

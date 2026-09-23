@@ -4,7 +4,7 @@ import { callLogDao, CallLogStats } from './daos/callLogDao';
 import { spamDao } from './daos/spamDao';
 import { callerIdDao } from './daos/callerIdDao';
 import { smsDao } from './daos/smsDao';
-import { Contact, CallLog, CallerIdRecord, SpamEntity, RoomDbMetrics, SmsMessage } from '../types';
+import { Contact, CallLog, CallerIdRecord, SpamEntity, RoomDbMetrics, SmsMessage, BackupMetadata } from '../types';
 import { INITIAL_CONTACTS, INITIAL_CALL_LOGS, INITIAL_SMS_MESSAGES, CALLER_ID_DATABASE, normalizePhone } from '../data/mockData';
 
 export interface OfflineLookupResult {
@@ -195,11 +195,15 @@ export class RoomDatabaseService {
       };
     }
 
+    const spamProtectionActive = this.isSpamProtectionEnabled();
+
     // Layer 2: Check Room Spam Database (SpamDao)
     const spamRecord = await spamDao.getByPhone(rawPhone);
     if (spamRecord) {
       const latencyMs = Number((performance.now() - startTime).toFixed(2));
       this.lastLookupTimeMs = latencyMs;
+      const isSpam = spamRecord.score >= 60;
+      const isBlocked = spamRecord.isBlocked || (spamProtectionActive && isSpam);
       return {
         record: {
           phone: spamRecord.phone,
@@ -214,8 +218,8 @@ export class RoomDatabaseService {
         },
         source: 'spam_list',
         latencyMs,
-        isSpam: spamRecord.score >= 60,
-        isBlocked: spamRecord.isBlocked,
+        isSpam,
+        isBlocked,
         isContact: false,
       };
     }
@@ -225,12 +229,14 @@ export class RoomDatabaseService {
     if (cachedCaller) {
       const latencyMs = Number((performance.now() - startTime).toFixed(2));
       this.lastLookupTimeMs = latencyMs;
+      const isSpam = cachedCaller.spamScore >= 60;
+      const isBlocked = spamProtectionActive && isSpam;
       return {
         record: cachedCaller,
         source: 'caller_id_cache',
         latencyMs,
-        isSpam: cachedCaller.spamScore >= 60,
-        isBlocked: false,
+        isSpam,
+        isBlocked,
         isContact: false,
       };
     }
@@ -255,7 +261,7 @@ export class RoomDatabaseService {
         source: 'heuristic_rule',
         latencyMs,
         isSpam: true,
-        isBlocked: false,
+        isBlocked: spamProtectionActive,
         isContact: false,
       };
     }
@@ -340,6 +346,80 @@ export class RoomDatabaseService {
   }
 
   /**
+   * Check if automated incoming spam protection is enabled
+   */
+  isSpamProtectionEnabled(): boolean {
+    try {
+      const saved = localStorage.getItem('smart_dialer_spam_protection_active');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Save live Caller ID metadata into the local Room database (caller_id_cache table)
+   * Future lookups for this number will now resolve instantly (<2ms) offline.
+   * If alsoAddToSpam is true (or score >= 60), it also records to Room spam database.
+   */
+  async saveLiveCallerIdToLocalDb(
+    record: CallerIdRecord,
+    options?: { alsoAddToSpam?: boolean }
+  ): Promise<void> {
+    await callerIdDao.cache(record);
+
+    if (options?.alsoAddToSpam || record.spamScore >= 60) {
+      await spamDao.addOrUpdate({
+        phone: record.phone,
+        name: record.name,
+        category: record.businessCategory || 'সম্ভাব্য স্প্যাম',
+        score: record.spamScore,
+        reportsCount: record.spamReports > 0 ? record.spamReports : 1,
+        isBlocked: record.spamScore >= 80,
+        notes: record.notes || 'Gemini AI লাইভ অ্যানালাইসিস দ্বারা চিহ্নিত',
+      });
+    }
+
+    this.notifyChange();
+  }
+
+  /**
+   * Check if a number is already cached in Room local Caller ID directory
+   */
+  async isCallerIdCached(phone: string): Promise<boolean> {
+    const cached = await callerIdDao.getByPhone(phone);
+    return cached !== null;
+  }
+
+  /**
+   * Toggle automated incoming spam protection
+   */
+  setSpamProtectionEnabled(enabled: boolean): void {
+    try {
+      localStorage.setItem('smart_dialer_spam_protection_active', String(enabled));
+    } catch (e) {
+      console.error('Failed to save spam protection state', e);
+    }
+    this.notifyChange();
+  }
+
+  /**
+   * Get all blocked phone entities with full details
+   */
+  async getBlockedEntities(): Promise<SpamEntity[]> {
+    const all = await spamDao.getAll();
+    return all.filter((s) => s.isBlocked).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /**
+   * Permanently delete a record from the spam list
+   */
+  async deleteBlockedRecord(phone: string): Promise<void> {
+    await spamDao.remove(phone);
+    this.notifyChange();
+  }
+
+  /**
    * Get all blocked phone numbers
    */
   async getBlockedNumbers(): Promise<string[]> {
@@ -403,6 +483,93 @@ export class RoomDatabaseService {
     };
 
     return JSON.stringify(dump, null, 2);
+  }
+
+  /**
+   * Update custom ringtone label and sound preference for a specific contact in Room DB
+   */
+  async updateContactRingtone(
+    contactId: string,
+    ringtoneLabel: string,
+    ringtoneId?: string
+  ): Promise<Contact | undefined> {
+    const updated = await contactDao.updateRingtone(contactId, ringtoneLabel, ringtoneId);
+    this.notifyChange();
+    return updated;
+  }
+
+  /**
+   * Remove custom ringtone preference for a specific contact in Room DB
+   */
+  async clearContactRingtone(contactId: string): Promise<Contact | undefined> {
+    const updated = await contactDao.clearRingtone(contactId);
+    this.notifyChange();
+    return updated;
+  }
+
+  /**
+   * Save or update quick note for a specific call log entry in Room DB
+   */
+  async updateCallLogNote(logId: string, note: string): Promise<void> {
+    await callLogDao.updateCallNote(logId, note);
+    this.notifyChange();
+  }
+
+  /**
+   * Save or update contact note in Room DB
+   */
+  async updateContactNote(contactId: string, note: string): Promise<Contact | undefined> {
+    const contact = await contactDao.getById(contactId);
+    if (!contact) return undefined;
+    const updated: Contact = { ...contact, note: note.trim() };
+    await contactDao.update(updated);
+    this.notifyChange();
+    return updated;
+  }
+
+  /**
+   * Get the recorded last successful backup information from Room DB metadata
+   */
+  async getLastBackupInfo(): Promise<BackupMetadata | null> {
+    try {
+      const record = await roomDb.dbMetadata.get('last_successful_backup');
+      if (record && record.value) {
+        return JSON.parse(record.value) as BackupMetadata;
+      }
+    } catch (err) {
+      console.warn('Failed to read last backup info from Room DB metadata:', err);
+    }
+    // Fallback to localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('smart_dialer_last_backup');
+        if (stored) {
+          return JSON.parse(stored) as BackupMetadata;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Persist the successful backup record into Room DB metadata & localStorage
+   */
+  async recordSuccessfulBackup(meta: BackupMetadata): Promise<void> {
+    try {
+      await roomDb.dbMetadata.put({
+        key: 'last_successful_backup',
+        value: JSON.stringify(meta),
+        updatedAt: Date.now(),
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('smart_dialer_last_backup', JSON.stringify(meta));
+      }
+      this.notifyChange();
+    } catch (err) {
+      console.error('Error saving backup metadata to Room DB:', err);
+    }
   }
 }
 

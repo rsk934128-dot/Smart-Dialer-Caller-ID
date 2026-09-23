@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   X,
   Star,
@@ -21,10 +21,21 @@ import {
   FileText,
   Tag,
   CardSim as SimCard,
+  Music,
+  Play,
+  Square,
+  Volume2,
+  Save,
+  RotateCcw,
+  Sparkles,
+  CheckCircle2,
+  BellRing,
 } from 'lucide-react';
 import { Contact, CallLog } from '../types';
 import { Language } from '../utils/i18n';
 import { callPermissionService } from '../services/callPermissionService';
+import { roomDbService } from '../db/roomDatabaseService';
+import { RINGTONE_PRESETS, playIncomingRingtone } from '../utils/sound';
 
 interface ContactDetailSheetProps {
   contact: Contact | null;
@@ -36,6 +47,7 @@ interface ContactDetailSheetProps {
   onEditContact: (contact: Contact) => void;
   onDeleteContact: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  onUpdateContact?: (contact: Contact) => void;
 }
 
 export const ContactDetailSheet: React.FC<ContactDetailSheetProps> = ({
@@ -48,11 +60,147 @@ export const ContactDetailSheet: React.FC<ContactDetailSheetProps> = ({
   onEditContact,
   onDeleteContact,
   onToggleFavorite,
+  onUpdateContact,
 }) => {
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Custom Ringtone & Room DB Preference State
+  const [isEditingRingtone, setIsEditingRingtone] = useState(false);
+  const [selectedRingtoneId, setSelectedRingtoneId] = useState<string>(contact?.ringtone || 'chime');
+  const [customRingtoneLabel, setCustomRingtoneLabel] = useState<string>(contact?.ringtoneLabel || '');
+  const [playingRingtoneId, setPlayingRingtoneId] = useState<string | null>(null);
+  const [isSavingRingtone, setIsSavingRingtone] = useState(false);
+  const [ringtoneSuccessMsg, setRingtoneSuccessMsg] = useState<string | null>(null);
+  const audioStopFnRef = useRef<(() => void) | null>(null);
+
   const isBn = lang === 'bn';
+
+  // Stop audio helper
+  const stopAudio = () => {
+    if (audioStopFnRef.current) {
+      audioStopFnRef.current();
+      audioStopFnRef.current = null;
+    }
+    setPlayingRingtoneId(null);
+  };
+
+  // Synchronize ringtone fields when contact changes
+  useEffect(() => {
+    stopAudio();
+    setIsEditingRingtone(false);
+    setSelectedRingtoneId(contact?.ringtone || 'chime');
+    setCustomRingtoneLabel(contact?.ringtoneLabel || '');
+    setRingtoneSuccessMsg(null);
+  }, [contact?.id]);
+
+  // Clean up any playing audio when unmounting or sheet closes
+  useEffect(() => {
+    return () => {
+      stopAudio();
+    };
+  }, []);
+
+  // Handle preview playback
+  const handleTogglePlayPreview = (ringtoneId: string) => {
+    if (playingRingtoneId === ringtoneId) {
+      stopAudio();
+    } else {
+      stopAudio();
+      setPlayingRingtoneId(ringtoneId);
+      audioStopFnRef.current = playIncomingRingtone(ringtoneId);
+    }
+  };
+
+  // Save custom ringtone label & sound preference to Room DB
+  const handleSaveRingtone = async () => {
+    if (!contact) return;
+    setIsSavingRingtone(true);
+    stopAudio();
+
+    try {
+      const trimmedLabel = customRingtoneLabel.trim();
+      const updated = await roomDbService.updateContactRingtone(
+        contact.id,
+        trimmedLabel,
+        selectedRingtoneId
+      );
+
+      if (updated && onUpdateContact) {
+        onUpdateContact(updated);
+      }
+
+      setRingtoneSuccessMsg(
+        isBn
+          ? `কাস্টম রিংটোন "${trimmedLabel || 'ডিফল্ট'}" Room ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে!`
+          : `Custom ringtone "${trimmedLabel || 'Default'}" saved to Room DB!`
+      );
+      setIsEditingRingtone(false);
+
+      setTimeout(() => {
+        setRingtoneSuccessMsg(null);
+      }, 4000);
+    } catch (err) {
+      console.error('Failed to save ringtone preference to Room DB:', err);
+    } finally {
+      setIsSavingRingtone(false);
+    }
+  };
+
+  // Reset custom ringtone to default in Room DB
+  const handleResetRingtone = async () => {
+    if (!contact) return;
+    setIsSavingRingtone(true);
+    stopAudio();
+
+    try {
+      const updated = await roomDbService.clearContactRingtone(contact.id);
+      if (updated && onUpdateContact) {
+        onUpdateContact(updated);
+      }
+      setSelectedRingtoneId('chime');
+      setCustomRingtoneLabel('');
+      setIsEditingRingtone(false);
+      setRingtoneSuccessMsg(
+        isBn
+          ? 'ডিফল্ট সিস্টেম রিংটোনে সফলভাবে রিসেট করা হয়েছে (Room DB আপডেটেড)'
+          : 'Reset to default system ringtone (Room DB updated)'
+      );
+      setTimeout(() => {
+        setRingtoneSuccessMsg(null);
+      }, 3500);
+    } catch (err) {
+      console.error('Failed to reset ringtone preference in Room DB:', err);
+    } finally {
+      setIsSavingRingtone(false);
+    }
+  };
+
+  // Quick suggestions for ringtone labels
+  const quickSuggestions = useMemo(() => {
+    return isBn
+      ? [
+          { label: 'আম্মু ও পরিবার (Family)', ringtoneId: 'flute', icon: '👨‍👩‍👧' },
+          { label: 'জরুরি অফিস কল (Work)', ringtoneId: 'vintage', icon: '💼' },
+          { label: 'ভিআইপি কলার (VIP)', ringtoneId: 'urgent', icon: '⭐' },
+          { label: 'ডাক্তার / চিকিৎসা', ringtoneId: 'urgent', icon: '🩺' },
+          { label: 'প্রিয় বন্ধু ও আড্ডা', ringtoneId: 'marimba', icon: '🎵' },
+          { label: 'শান্ত সুর / রিল্যাক্স', ringtoneId: 'calm', icon: '🌿' },
+        ]
+      : [
+          { label: 'Family & Loved Ones', ringtoneId: 'flute', icon: '👨‍👩‍👧' },
+          { label: 'Work / Office Ring', ringtoneId: 'vintage', icon: '💼' },
+          { label: 'VIP Priority Call', ringtoneId: 'urgent', icon: '⭐' },
+          { label: 'Doctor / Medical Alert', ringtoneId: 'urgent', icon: '🩺' },
+          { label: 'Close Friends', ringtoneId: 'marimba', icon: '🎵' },
+          { label: 'Calm & Relax Melody', ringtoneId: 'calm', icon: '🌿' },
+        ];
+  }, [isBn]);
+
+  const currentPreset = useMemo(() => {
+    const activeId = isEditingRingtone ? selectedRingtoneId : contact?.ringtone || 'chime';
+    return RINGTONE_PRESETS.find((p) => p.id === activeId) || RINGTONE_PRESETS[0];
+  }, [contact?.ringtone, selectedRingtoneId, isEditingRingtone]);
 
   // Normalize phone digits for resilient history lookup
   const normalizeDigits = (num: string) => num.replace(/[^\d]/g, '');
@@ -447,6 +595,314 @@ export const ContactDetailSheet: React.FC<ContactDetailSheetProps> = ({
             )}
           </div>
 
+          {/* CUSTOM RINGTONE & AUDIO LABEL SECTION (Room DB Stored) */}
+          <div
+            id="custom-ringtone-section"
+            className="rounded-2xl border border-purple-200/90 dark:border-purple-900/60 bg-gradient-to-br from-purple-50/70 via-indigo-50/20 to-white dark:from-purple-950/25 dark:via-neutral-900 dark:to-neutral-900 p-3.5 space-y-3 shadow-xs"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-xl bg-purple-600 text-white shadow-xs">
+                  <Music className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-xs text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                    <span>{isBn ? 'কাস্টম রিংটোন ও লেবেল' : 'Custom Ringtone & Label'}</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60">
+                      Room DB
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                    {isBn
+                      ? 'এই নির্দিষ্ট কন্টাক্টের ইনকামিং কলের জন্য কাস্টম অডিও লেবেল'
+                      : 'Dedicated ringtone label stored in local Room database'}
+                  </p>
+                </div>
+              </div>
+
+              {!isEditingRingtone && (
+                <button
+                  id="edit-ringtone-toggle-btn"
+                  onClick={() => setIsEditingRingtone(true)}
+                  className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800 transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>
+                    {contact.ringtoneLabel || contact.ringtone
+                      ? isBn
+                        ? 'পরিবর্তন'
+                        : 'Edit'
+                      : isBn
+                      ? 'বরাদ্দ করুন'
+                      : 'Assign'}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {/* Room DB Success Notice */}
+            {ringtoneSuccessMsg && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="font-medium text-[11px] leading-tight">{ringtoneSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* View Mode (when not editing) */}
+            {!isEditingRingtone ? (
+              <div className="space-y-2">
+                {contact.ringtoneLabel || contact.ringtone ? (
+                  <div className="p-3 rounded-xl bg-white/95 dark:bg-neutral-800/95 border border-purple-100 dark:border-purple-900/40 space-y-2.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
+                            🎵 {contact.ringtoneLabel || (isBn ? 'কাস্টম রিংটোন' : 'Custom Tune')}
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 font-semibold">
+                            {isBn ? 'সক্রিয়' : 'Active'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
+                          <span>{currentPreset?.icon || '🔔'}</span>
+                          <span>{isBn ? currentPreset?.nameBn : currentPreset?.nameEn}</span>
+                          <span className="text-neutral-300 dark:text-neutral-600">•</span>
+                          <span className="font-mono text-[9px] text-purple-600 dark:text-purple-400">
+                            Room SQLite: contacts.ringtoneLabel
+                          </span>
+                        </p>
+                      </div>
+
+                      {/* Preview Sound Button */}
+                      <button
+                        id="play-active-ringtone-preview-btn"
+                        type="button"
+                        onClick={() => handleTogglePlayPreview(contact.ringtone || 'chime')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs cursor-pointer ${
+                          playingRingtoneId === (contact.ringtone || 'chime')
+                            ? 'bg-rose-500 hover:bg-rose-600 text-white animate-pulse'
+                            : 'bg-purple-600 hover:bg-purple-500 text-white'
+                        }`}
+                      >
+                        {playingRingtoneId === (contact.ringtone || 'chime') ? (
+                          <>
+                            <Square className="w-3.5 h-3.5 fill-current" />
+                            <span>{isBn ? 'সুর থামান' : 'Stop'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <span>{isBn ? 'সুর শুনুন' : 'Preview'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Equalizer Waveform Indicator When Playing */}
+                    {playingRingtoneId === (contact.ringtone || 'chime') && (
+                      <div className="flex items-center gap-2 py-1 px-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-[10px] text-purple-700 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/40">
+                        <Volume2 className="w-3.5 h-3.5 animate-bounce shrink-0 text-purple-600" />
+                        <span className="font-medium">
+                          {isBn ? 'রিংটোন সিন্থেসাইজার প্রিভিউ বাজছে...' : 'Audio synthesizer preview playing...'}
+                        </span>
+                        <div className="flex items-center gap-0.5 ml-auto">
+                          <span className="w-1 h-3 bg-purple-500 rounded-full animate-pulse" />
+                          <span className="w-1 h-4 bg-purple-600 rounded-full animate-pulse delay-75" />
+                          <span className="w-1 h-2 bg-purple-400 rounded-full animate-pulse delay-150" />
+                          <span className="w-1 h-5 bg-purple-600 rounded-full animate-pulse" />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-1 flex items-center justify-between text-[10px] border-t border-neutral-100 dark:border-neutral-700/50">
+                      <span className="text-neutral-400">
+                        {isBn ? 'ইনকামিং কল আসলে এই কাস্টম সুর ও লেবেল বাজবে' : 'Plays whenever this contact calls'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleResetRingtone}
+                        disabled={isSavingRingtone}
+                        className="text-neutral-500 hover:text-rose-500 dark:text-neutral-400 dark:hover:text-rose-400 transition flex items-center gap-1 cursor-pointer font-medium"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>{isBn ? 'ডিফল্ট সুরে ফেরত' : 'Reset to Default'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-white/70 dark:bg-neutral-800/70 border border-neutral-200/80 dark:border-neutral-700/60 flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                        <BellRing className="w-3.5 h-3.5 text-neutral-400" />
+                        <span>{isBn ? 'ডিফল্ট সিস্টেম রিংটোন সক্রিয়' : 'Default System Ringtone Active'}</span>
+                      </div>
+                      <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                        {isBn
+                          ? 'এই নম্বরের জন্য এখনো কোনো কাস্টম রিংটোন লেবেল বরাদ্দ করা হয়নি।'
+                          : 'No custom ringtone label assigned yet.'}
+                      </p>
+                    </div>
+                    <button
+                      id="assign-ringtone-empty-btn"
+                      type="button"
+                      onClick={() => setIsEditingRingtone(true)}
+                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition shrink-0 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{isBn ? 'লেবেল দিন' : 'Assign Label'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Edit Mode: Assignment & Customization Form */
+              <div className="space-y-3 p-3 rounded-xl bg-white dark:bg-neutral-800/95 border border-purple-200 dark:border-purple-800 animate-fadeIn">
+                {/* 1. Custom Ringtone Label Input */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center justify-between">
+                    <span>{isBn ? 'রিংটোন লেবেল (Custom Ringtone Label):' : 'Ringtone Label Name:'}</span>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-normal">
+                      {isBn ? 'Room DB-তে স্টোর হবে' : 'Stored in Room DB'}
+                    </span>
+                  </label>
+                  <input
+                    id="custom-ringtone-label-input"
+                    type="text"
+                    value={customRingtoneLabel}
+                    onChange={(e) => setCustomRingtoneLabel(e.target.value)}
+                    placeholder={
+                      isBn
+                        ? 'যেমন: "আম্মুর জন্য বিশেষ টিউন", "জরুরি অফিস", "VIP Caller"...'
+                        : 'e.g. "Mom Special Ringtone", "Urgent Office Call", "VIP Contact"...'
+                    }
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition"
+                  />
+                </div>
+
+                {/* Quick Suggestion Chips */}
+                <div className="space-y-1">
+                  <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
+                    {isBn ? 'দ্রুত লেবেল নির্বাচন (Quick Suggestion Chips):' : 'Quick Label Suggestions:'}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {quickSuggestions.map((item) => (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => {
+                          setCustomRingtoneLabel(item.label);
+                          if (item.ringtoneId) setSelectedRingtoneId(item.ringtoneId);
+                        }}
+                        className={`text-[10px] px-2 py-1 rounded-lg border transition cursor-pointer flex items-center gap-1 ${
+                          customRingtoneLabel === item.label
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold'
+                            : 'bg-neutral-100 dark:bg-neutral-700/60 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200'
+                        }`}
+                      >
+                        <span>{item.icon}</span>
+                        <span>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Ringtone Sound Selector with Play/Stop Preview */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 block">
+                    {isBn ? 'রিংটোন সুর ও প্রিভিউ (Select Melody & Audio Preview):' : 'Ringtone Sound & Preview:'}
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-0.5">
+                    {RINGTONE_PRESETS.map((preset) => {
+                      const isSelected = selectedRingtoneId === preset.id;
+                      const isPlaying = playingRingtoneId === preset.id;
+
+                      return (
+                        <div
+                          key={preset.id}
+                          onClick={() => setSelectedRingtoneId(preset.id)}
+                          className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                            isSelected
+                              ? 'border-purple-500 bg-purple-50/70 dark:bg-purple-950/40 text-purple-950 dark:text-purple-200 ring-1 ring-purple-400'
+                              : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-base shrink-0">{preset.icon}</span>
+                            <div className="truncate">
+                              <p className="text-xs font-semibold truncate leading-tight">
+                                {isBn ? preset.nameBn : preset.nameEn}
+                              </p>
+                              <p className="text-[9px] text-neutral-400 truncate">
+                                {isBn ? preset.defaultLabelBn : preset.defaultLabelEn}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTogglePlayPreview(preset.id);
+                            }}
+                            className={`p-1.5 rounded-lg shrink-0 transition cursor-pointer ${
+                              isPlaying
+                                ? 'bg-rose-500 text-white animate-pulse'
+                                : isSelected
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-300'
+                            }`}
+                            title={isPlaying ? 'Stop' : 'Play preview'}
+                          >
+                            {isPlaying ? (
+                              <Square className="w-3 h-3 fill-current" />
+                            ) : (
+                              <Play className="w-3 h-3 fill-current" />
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Form Buttons */}
+                <div className="flex gap-2 pt-1 border-t border-neutral-100 dark:border-neutral-700/60">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopAudio();
+                      setIsEditingRingtone(false);
+                      setSelectedRingtoneId(contact.ringtone || 'chime');
+                      setCustomRingtoneLabel(contact.ringtoneLabel || '');
+                    }}
+                    className="flex-1 py-2 rounded-xl bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-xs font-semibold hover:bg-neutral-200 transition cursor-pointer"
+                  >
+                    {isBn ? 'বাতিল' : 'Cancel'}
+                  </button>
+                  <button
+                    id="save-ringtone-pref-btn"
+                    type="button"
+                    disabled={isSavingRingtone}
+                    onClick={handleSaveRingtone}
+                    className="flex-2 py-2 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>
+                      {isSavingRingtone
+                        ? isBn
+                          ? 'সংরক্ষণ হচ্ছে...'
+                          : 'Saving...'
+                        : isBn
+                        ? '💾 Room ডাটাবেজে সংরক্ষণ'
+                        : 'Save to Room DB'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Call History With This Contact */}
           <div className="space-y-2.5 pt-1">
             <div className="flex items-center justify-between">
@@ -518,6 +974,11 @@ export const ContactDetailSheet: React.FC<ContactDetailSheetProps> = ({
                           <p className="text-[10px] text-neutral-500">
                             {formatRelativeTime(log.timestamp)}
                           </p>
+                          {log.note && (
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded mt-0.5 truncate max-w-[170px] border border-amber-200/50 dark:border-amber-900/30">
+                              📝 {log.note}
+                            </p>
+                          )}
                         </div>
                       </div>
 

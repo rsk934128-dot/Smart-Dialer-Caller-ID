@@ -99,6 +99,30 @@ export class ContactDao {
     return nextVal;
   }
 
+  async updateRingtone(id: string, ringtoneLabel: string, ringtoneId?: string): Promise<Contact | undefined> {
+    const entity = await roomDb.contacts.get(id);
+    if (!entity) return undefined;
+    const updatedEntity: ContactDbEntity = {
+      ...entity,
+      ringtoneLabel: ringtoneLabel.trim() || undefined,
+      ringtone: ringtoneId || entity.ringtone || 'chime',
+    };
+    await roomDb.contacts.put(updatedEntity);
+    return fromContactDbEntity(updatedEntity);
+  }
+
+  async clearRingtone(id: string): Promise<Contact | undefined> {
+    const entity = await roomDb.contacts.get(id);
+    if (!entity) return undefined;
+    const updatedEntity: ContactDbEntity = {
+      ...entity,
+      ringtoneLabel: undefined,
+      ringtone: undefined,
+    };
+    await roomDb.contacts.put(updatedEntity);
+    return fromContactDbEntity(updatedEntity);
+  }
+
   async bulkInsert(contacts: Contact[]): Promise<void> {
     const entities = contacts.map(toContactDbEntity);
     await roomDb.contacts.bulkPut(entities);

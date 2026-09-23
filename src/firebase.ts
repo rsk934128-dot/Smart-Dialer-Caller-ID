@@ -26,24 +26,35 @@ import firebaseConfig from '../firebase-applet-config.json';
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
-// CRITICAL: The app will break without specifying firestoreDatabaseId
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// CRITICAL: The app will break without specifying firestoreDatabaseId if provided
+export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 export const auth = getAuth(app);
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Test connection on boot according to Firebase Skill directive
+// Test connection on boot gracefully with network-awareness
 async function testConnection() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return;
+  }
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is offline or network restricted. Local Room DB fallback active.');
+    // Graceful offline detection - Dexie.js Room DB remains fully functional
+    const msg = error instanceof Error ? error.message.toLowerCase() : '';
+    if (
+      msg.includes('offline') ||
+      msg.includes('unavailable') ||
+      msg.includes('failed to get document')
+    ) {
+      // Benign expected state in offline or sandboxed preview mode
+      return;
     }
   }
 }
-testConnection();
+// Run non-blocking test connection
+testConnection().catch(() => {});
 
 // Standard Firestore Error Handling conforming to Firebase Skill guidelines
 export enum OperationType {

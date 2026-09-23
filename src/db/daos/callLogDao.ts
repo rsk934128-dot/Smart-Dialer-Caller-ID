@@ -71,6 +71,20 @@ export class CallLogDao {
     return entity.id;
   }
 
+  async updateCallNote(id: string, note: string): Promise<void> {
+    await roomDb.callLogs.update(id, { note: note.trim() });
+  }
+
+  async getLatestByPhone(phone: string): Promise<CallLog | undefined> {
+    const norm = normalizePhone(phone);
+    const item = await roomDb.callLogs
+      .where('normalizedPhone')
+      .equals(norm)
+      .reverse()
+      .sortBy('timestamp');
+    return item.length > 0 ? fromCallLogDbEntity(item[0]) : undefined;
+  }
+
   async delete(id: string): Promise<void> {
     await roomDb.callLogs.delete(id);
   }

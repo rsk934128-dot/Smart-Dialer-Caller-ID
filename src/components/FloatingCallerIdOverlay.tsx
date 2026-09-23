@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Move,
+  Music,
 } from 'lucide-react';
 import { ActiveCall } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
@@ -142,6 +143,18 @@ export const FloatingCallerIdOverlay: React.FC<FloatingCallerIdOverlayProps> = (
                   <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/30 text-rose-300 border border-rose-500/40">
                     <AlertTriangle className="w-2.5 h-2.5" />
                     <span>স্প্যাম {info?.spamScore}%</span>
+                  </span>
+                )}
+                {isSilenced && (
+                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    <VolumeX className="w-2.5 h-2.5" />
+                    <span>সাইলেন্ট মোড</span>
+                  </span>
+                )}
+                {call.customRingtoneLabel && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/25 text-purple-300 border border-purple-500/40">
+                    <Music className="w-2.5 h-2.5" />
+                    <span>{call.customRingtoneLabel}</span>
                   </span>
                 )}
               </div>

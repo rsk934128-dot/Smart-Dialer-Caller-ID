@@ -27,6 +27,7 @@ interface AuthModalProps {
   onClose: () => void;
   lang: Language;
   syncStatus: CloudSyncStatus;
+  onOpenBackup?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -34,6 +35,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   lang,
   syncStatus,
+  onOpenBackup,
 }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -253,9 +255,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span>{isBn ? 'ক্লাউডে সংরক্ষিত ডাটা:' : 'Cloud Synced Data:'}</span>
                   </span>
                   <span className="text-[10px] font-mono text-neutral-400">
-                    {syncStatus.lastSyncedAt
-                      ? `${syncStatus.lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} এ সিঙ্কড`
-                      : 'সিঙ্ক হচ্ছে...'}
+                    {(() => {
+                      if (!syncStatus?.lastSyncedAt) return isBn ? 'সিঙ্ক হয়নি' : 'Not synced';
+                      const d =
+                        syncStatus.lastSyncedAt instanceof Date
+                          ? syncStatus.lastSyncedAt
+                          : new Date(syncStatus.lastSyncedAt);
+                      if (isNaN(d.getTime())) return isBn ? 'সিঙ্ক হয়নি' : 'Not synced';
+                      try {
+                        return `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${isBn ? 'এ সিঙ্কড' : 'synced'}`;
+                      } catch {
+                        return isBn ? 'সিঙ্কড' : 'Synced';
+                      }
+                    })()}
                   </span>
                 </div>
 
@@ -298,6 +310,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       : (isBn ? 'এখনই ক্লাউডে ব্যাকআপ নিন' : 'Sync All Data to Cloud Now')}
                   </span>
                 </button>
+
+                {onOpenBackup && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenBackup();
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    <span>{isBn ? 'রুম ডিবি ব্যাকআপ ম্যানেজার খুলুন' : 'Open Room DB Backup Manager'}</span>
+                  </button>
+                )}
 
                 <button
                   id="sign-out-btn"

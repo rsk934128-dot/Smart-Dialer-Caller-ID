@@ -1,6 +1,7 @@
-import { SmsMessage, SmsThread } from '../types';
+import { SmsMessage, SmsThread, SmsCategory } from '../types';
 import { roomDbService } from '../db/roomDatabaseService';
 import { callPermissionService } from './callPermissionService';
+import { classifySms } from '../utils/smsClassifier';
 
 export interface IncomingSmsPayload {
   senderPhone: string;
@@ -8,6 +9,7 @@ export interface IncomingSmsPayload {
   body: string;
   simSlot?: 1 | 2;
   isSpam?: boolean;
+  category?: SmsCategory;
 }
 
 type IncomingSmsListener = (message: SmsMessage) => void;
@@ -85,8 +87,12 @@ class SmsService {
       console.warn('SMS permission not granted. Incoming SMS blocked by Android role security.');
     }
 
-    const otp = this.detectOtp(payload.body);
-    const isSpam = payload.isSpam !== undefined ? payload.isSpam : this.detectSpam(payload.body, payload.senderPhone);
+    const classification = classifySms(payload.body, payload.senderPhone, payload.senderName);
+    const otp = classification.otpCode || this.detectOtp(payload.body);
+    const isSpam = payload.isSpam !== undefined ? payload.isSpam : (payload.category === 'spam' || classification.isSpam);
+    const category: SmsCategory =
+      payload.category ||
+      (isSpam ? 'spam' : classification.category);
 
     const newMsg: SmsMessage = {
       id: `sms-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -101,6 +107,7 @@ class SmsService {
       isOtp: !!otp,
       otpCode: otp,
       isSpam,
+      category,
       isOfflineStored: true,
     };
 
@@ -159,6 +166,7 @@ class SmsService {
       type: 'sent',
       status: 'sending',
       simSlot,
+      category: 'personal',
       isOfflineStored: true,
     };
 
@@ -209,6 +217,7 @@ class SmsService {
     senderName: string;
     body: string;
     simSlot: 1 | 2;
+    category?: SmsCategory;
     isOtp?: boolean;
     isSpam?: boolean;
   }> {
@@ -217,46 +226,59 @@ class SmsService {
     return [
       {
         title: 'Google Verification Code',
-        titleBn: 'গুগল ভেরিফিকেশন ওটিপি',
+        titleBn: 'গুগল ভেরিফিকেশন ওটিপি (OTP)',
         sender: 'Google',
         senderName: 'Google Security',
         body: `G-${randomOtp} is your Google verification code. Never share your security code with anyone.`,
         simSlot: 1,
+        category: 'otp',
         isOtp: true,
-      },
-      {
-        title: 'bKash Cash In / Payment',
-        titleBn: 'বিকাশ ক্যাশ ইন নোটিফিকেশন',
-        sender: 'bKash',
-        senderName: 'bKash Services',
-        body: `You have received Tk 2,500.00 from 01711234567. Fee Tk 0.00. Balance Tk 11,950.50. TrxID 9K${Math.random().toString(36).substring(2, 6).toUpperCase()}89L2 at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`,
-        simSlot: 1,
-        isOtp: false,
-      },
-      {
-        title: 'Bank OTP Authentication',
-        titleBn: 'ব্যাংক ট্রানজাকশন ওটিপি',
-        sender: 'CityBank',
-        senderName: 'City Bank Security',
-        body: `আপনার অনলাইন লেনদেনের জন্য ওটিপি কোড: ${randomOtp}। এই কোডের মেয়াদ ৩ মিনিট। অন্য কাউকে বলবেন না।`,
-        simSlot: 1,
-        isOtp: true,
-      },
-      {
-        title: 'Family Message (Brother)',
-        titleBn: 'তানভীর আহমেদ (বড় ভাই)',
-        sender: '+880 1711-234567',
-        senderName: 'তানভীর আহমেদ',
-        body: 'জরুরি একটা ফাইল মেইল করেছি, একটু দেখে কনফার্ম করিস।',
-        simSlot: 1,
       },
       {
         title: 'Grameenphone Internet Alert',
-        titleBn: 'গ্রামীণফোন ডাটা অফার',
+        titleBn: 'গ্রামীণফোন ডাটা অফার (Promotions)',
         sender: 'GP-INFO',
         senderName: 'Grameenphone 4G',
         body: 'মাইপ্ল্যান স্পেশাল: মাত্র ৫৯ টাকায় ৭ জিবি ৩ দিন মেয়াদ! অফারটি নিতে এখনই ডায়াল করুন *১২১*১*২#।',
         simSlot: 1,
+        category: 'promotions',
+      },
+      {
+        title: 'Daraz Mega Sale Promo',
+        titleBn: 'দারাজ মেগা ডিসকাউন্ট (Promotions)',
+        sender: 'DARAZ',
+        senderName: 'Daraz Online Shopping',
+        body: 'দারাজ ফ্ল্যাশ সেল! আজই কেনাকাটায় উপভোগ করুন ৫০% পর্যন্ত ফ্ল্যাট ছাড় ও ফ্রি ডেলিভারি। কুপন কোড: DARAZ50',
+        simSlot: 1,
+        category: 'promotions',
+      },
+      {
+        title: 'Family Message (Brother)',
+        titleBn: 'তানভীর আহমেদ - বড় ভাই (Personal)',
+        sender: '+880 1711-234567',
+        senderName: 'তানভীর আহমেদ',
+        body: 'জরুরি একটা ফাইল মেইল করেছি, একটু দেখে কনফার্ম করিস।',
+        simSlot: 1,
+        category: 'personal',
+      },
+      {
+        title: 'Friend Hangout Chat',
+        titleBn: 'রাকিব হাসান - বন্ধু (Personal)',
+        sender: '+880 1819-234567',
+        senderName: 'রাকিব হাসান',
+        body: 'দোস্ত, সন্ধ্যায় ধানমন্ডি ৮ এ দেখা করবি? চা খেতে বের হচ্ছি।',
+        simSlot: 2,
+        category: 'personal',
+      },
+      {
+        title: 'Bank OTP Authentication',
+        titleBn: 'সিটি ব্যাংক ট্রানজাকশন (OTP)',
+        sender: 'CityBank',
+        senderName: 'City Bank Security',
+        body: `আপনার অনলাইন লেনদেনের জন্য ওটিপি কোড: ${randomOtp}। এই কোডের মেয়াদ ৩ মিনিট। অন্য কাউকে বলবেন না।`,
+        simSlot: 1,
+        category: 'otp',
+        isOtp: true,
       },
       {
         title: 'Spam / Fraud Prize Warning',
@@ -265,6 +287,7 @@ class SmsService {
         senderName: 'লটারি ও ফেক প্রাইজ (Fraud)',
         body: 'অভিনন্দন! আপনি জিতেছেন ৫০ হাজার টাকার নগদ ক্যাশব্যাক! টাকা সরাসরি পেতে এখনই আপনার পিন কোড দিন।',
         simSlot: 2,
+        category: 'spam',
         isSpam: true,
       },
     ];

@@ -14,6 +14,8 @@ export const INITIAL_CONTACTS: Contact[] = [
     note: 'বড় ভাই',
     storageLocation: 'sim1',
     simSlot: 1,
+    ringtone: 'flute',
+    ringtoneLabel: 'বাউলি বাঁশি (Family Folk)',
   },
   {
     id: 'c-2',
@@ -28,6 +30,8 @@ export const INITIAL_CONTACTS: Contact[] = [
     note: 'ফ্যামিলি ফিজিশিয়ান',
     storageLocation: 'sim2',
     simSlot: 2,
+    ringtone: 'urgent',
+    ringtoneLabel: 'মেডিকেল অ্যালার্ট (Emergency)',
   },
   {
     id: 'c-3',
@@ -41,6 +45,8 @@ export const INITIAL_CONTACTS: Contact[] = [
     company: 'Tech Solutions Ltd.',
     note: 'প্রজেক্ট ম্যানেজার',
     storageLocation: 'device',
+    ringtone: 'vintage',
+    ringtoneLabel: 'অফিস প্রজেক্ট বেল (Work Ring)',
   },
   {
     id: 'c-4',
@@ -447,6 +453,7 @@ export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
     isOtp: true,
     otpCode: '847291',
     isSpam: false,
+    category: 'otp',
     isOfflineStored: true,
   },
   // Tanvir Ahmed Conversation Thread
@@ -461,6 +468,7 @@ export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
     status: 'read',
     simSlot: 1,
     isSpam: false,
+    category: 'personal',
     isOfflineStored: true,
   },
   {
@@ -474,6 +482,7 @@ export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
     status: 'delivered',
     simSlot: 1,
     isSpam: false,
+    category: 'personal',
     isOfflineStored: true,
   },
   {
@@ -487,6 +496,7 @@ export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
     status: 'received',
     simSlot: 1,
     isSpam: false,
+    category: 'personal',
     isOfflineStored: true,
   },
   // bKash Transaction notification
@@ -502,6 +512,7 @@ export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
     simSlot: 1,
     isOtp: false,
     isSpam: false,
+    category: 'personal',
     isOfflineStored: true,
   },
   // Dr. Rafiqul Islam Appointment Confirmation
@@ -516,6 +527,7 @@ export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
     status: 'read',
     simSlot: 2,
     isSpam: false,
+    category: 'personal',
     isOfflineStored: true,
   },
   // Telecom Promotion (Grameenphone)
@@ -530,6 +542,22 @@ export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
     status: 'read',
     simSlot: 1,
     isSpam: false,
+    category: 'promotions',
+    isOfflineStored: true,
+  },
+  // E-Commerce Promotion (Daraz Flash Sale)
+  {
+    id: 'sms-9',
+    senderPhone: 'DARAZ',
+    senderName: 'Daraz Online Mall',
+    recipientPhone: '+880 1711-000111',
+    body: 'দারাজ মেগা ক্যাম্পেইন! ফ্যাশন ও গ্যাজেটে আজই উপভোগ করুন ৬০% পর্যন্ত ফ্ল্যাট ছাড় এবং ফ্রি ডেলিভারি কুপন: MEGA60।',
+    timestamp: NOW_MS - 12 * HOUR,
+    type: 'inbox',
+    status: 'read',
+    simSlot: 1,
+    isSpam: false,
+    category: 'promotions',
     isOfflineStored: true,
   },
   // Suspected Spam / Fraud SMS
@@ -544,6 +572,7 @@ export const INITIAL_SMS_MESSAGES: SmsMessage[] = [
     status: 'read',
     simSlot: 1,
     isSpam: true,
+    category: 'spam',
     isOfflineStored: true,
   },
 ];
