@@ -32,6 +32,12 @@ export const auth = getAuth(app);
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
+// Request Google Contacts & Gmail Other Contacts scopes
+googleProvider.addScope('https://www.googleapis.com/auth/contacts');
+googleProvider.addScope('https://www.googleapis.com/auth/contacts.other.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/contacts.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/user.phonenumbers.read');
+googleProvider.addScope('https://www.googleapis.com/auth/user.emails.read');
 
 // Test connection on boot gracefully with network-awareness
 async function testConnection() {
@@ -109,17 +115,49 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
+export function isUserAuthCancellation(err: unknown): boolean {
+  if (!err) return false;
+  const anyErr = err as any;
+  const code = anyErr.code || '';
+  const message = anyErr.message || (err instanceof Error ? err.message : String(err));
+  return (
+    code === 'auth/popup-closed-by-user' ||
+    code === 'auth/cancelled-popup-request' ||
+    code === 'auth/popup-blocked' ||
+    message.includes('popup-closed-by-user') ||
+    message.includes('cancelled-popup-request') ||
+    message.includes('popup-blocked')
+  );
+}
+
 // Authentication Helpers
 export async function loginWithGoogle(): Promise<User> {
   try {
     const result = await signInWithPopup(auth, googleProvider);
+    // Cache OAuth access token strictly in-memory for Google People API
+    try {
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken && typeof window !== 'undefined' && (window as any).__setGoogleAccessToken) {
+        (window as any).__setGoogleAccessToken(credential.accessToken);
+      }
+    } catch {
+      // ignore
+    }
     // Sync user profile document
     if (result.user) {
-      await syncUserProfile(result.user);
+      try {
+        await syncUserProfile(result.user);
+      } catch (profileErr) {
+        console.warn('User profile sync skipped/failed:', profileErr);
+      }
     }
     return result.user;
   } catch (err: unknown) {
-    console.error('Google Sign-In Error:', err);
+    if (isUserAuthCancellation(err)) {
+      console.info('Google Sign-In popup closed or cancelled by user.');
+    } else {
+      console.warn('Google Sign-In notice:', err);
+    }
     throw err;
   }
 }
@@ -132,12 +170,16 @@ export async function registerWithEmail(
   try {
     const result = await createUserWithEmailAndPassword(auth, email, pass);
     if (displayName) {
-      await updateProfile(result.user, { displayName });
+      await updateProfile(result.user, { displayName }).catch(() => {});
     }
-    await syncUserProfile(result.user);
+    try {
+      await syncUserProfile(result.user);
+    } catch {
+      // Non-fatal
+    }
     return result.user;
   } catch (err: unknown) {
-    console.error('Email Registration Error:', err);
+    console.warn('Email Registration notice:', err);
     throw err;
   }
 }
@@ -146,11 +188,15 @@ export async function loginWithEmail(email: string, pass: string): Promise<User>
   try {
     const result = await signInWithEmailAndPassword(auth, email, pass);
     if (result.user) {
-      await syncUserProfile(result.user);
+      try {
+        await syncUserProfile(result.user);
+      } catch {
+        // Non-fatal
+      }
     }
     return result.user;
   } catch (err: unknown) {
-    console.error('Email Login Error:', err);
+    console.warn('Email Login notice:', err);
     throw err;
   }
 }

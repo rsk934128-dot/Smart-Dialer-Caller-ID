@@ -9,7 +9,7 @@ export interface Contact {
   isFavorite: boolean;
   company?: string;
   tag?: string;
-  storageLocation?: 'device' | 'sim1' | 'sim2';
+  storageLocation?: 'device' | 'sim1' | 'sim2' | 'google';
   simSlot?: 1 | 2;
   ringtone?: string;
   ringtoneLabel?: string;
@@ -93,7 +93,106 @@ export interface DialerSettings {
   simSlot: 1 | 2;
 }
 
-export type AppTab = 'keypad' | 'recents' | 'contacts' | 'messages' | 'callerid' | 'stats' | 'android-guide';
+export type AppTab =
+  | 'keypad'
+  | 'recents'
+  | 'contacts'
+  | 'messages'
+  | 'callerid'
+  | 'stats'
+  | 'android-guide'
+  | 'fintech-security';
+
+export interface DeviceFingerprintData {
+  deviceHash: string;
+  canvasHash: string;
+  webglHash: string;
+  webglVendor: string;
+  webglRenderer: string;
+  hardwareConcurrency: number;
+  deviceMemoryGb?: number;
+  screenResolution: string;
+  colorDepth: number;
+  pixelRatio: number;
+  platform: string;
+  touchSupport: boolean;
+  audioHash: string;
+  userAgent: string;
+}
+
+export interface NetworkConnectionData {
+  type: string;
+  effectiveType: 'slow-2g' | '2g' | '3g' | '4g' | '5g' | 'wifi' | 'ethernet' | 'unknown';
+  downlinkMbps: number;
+  rttMs: number;
+  saveData: boolean;
+  webrtcLocalIps: string[];
+  webrtcPublicIp?: string;
+  detectedIp?: string;
+  isOnline: boolean;
+}
+
+export interface CarrierIntelligenceData {
+  ip: string;
+  carrierName: string;
+  operatorType: 'mobile_data' | 'broadband_isp' | 'datacenter_vpn' | 'unknown';
+  asn: string;
+  mccMnc?: string;
+  country: string;
+  city?: string;
+  isMobileCarrier: boolean;
+  isVpnOrProxy: boolean;
+  riskWeight: number;
+}
+
+export interface SimCardBindingState {
+  simSlot: 1 | 2;
+  carrierName: string;
+  iccidMasked: string;
+  iccidHash: string;
+  imsiMasked: string;
+  status: 'ACTIVE' | 'SWAPPED' | 'REVOKED' | 'SUSPICIOUS';
+  swappedAt?: number;
+  isSimSwapSuspected: boolean;
+}
+
+export interface FintechSecurityAuditItem {
+  id: string;
+  timestamp: number;
+  userId: string;
+  clientIp: string;
+  carrier: string;
+  networkType: string;
+  riskScore: number;
+  decision: 'ALLOW' | 'REQUIRE_2FA_OTP' | 'HOLD_TRANSACTION' | 'BLOCK_FRAUD';
+  factors: string[];
+  simSwapped: boolean;
+  vpnDetected: boolean;
+}
+
+export interface FintechTransactionPayload {
+  amount: number;
+  currency: string;
+  channel: 'BKASH' | 'NAGAD' | 'ROCKET' | 'UPAY' | 'BANK_TRANSFER' | 'CARD_PAYMENT';
+  recipient: string;
+  recipientName?: string;
+  note?: string;
+}
+
+export interface FintechSecurityAssessmentResult {
+  transactionId: string;
+  riskScore: number; // 0 to 100
+  decision: 'ALLOW' | 'REQUIRE_2FA_OTP' | 'HOLD_TRANSACTION' | 'BLOCK_FRAUD';
+  reasons: string[];
+  timestamp: number;
+  clientIp: string;
+  carrier: string;
+  asn: string;
+  deviceMatch: boolean;
+  simSwapDetected: boolean;
+  telegramAlertSent?: boolean;
+  telegramError?: string;
+}
 
 export type SmsType = 'inbox' | 'sent' | 'draft' | 'failed';
 export type SmsStatus = 'received' | 'read' | 'delivered' | 'sending' | 'failed';
@@ -148,6 +247,8 @@ export interface RoomDbMetrics {
   messagesCount?: number;
   isInitialized: boolean;
   lastLookupTimeMs?: number;
+  version?: number;
+  approximateSizeKb?: number;
 }
 
 export interface BackupMetadata {

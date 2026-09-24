@@ -51,16 +51,65 @@ export const GoogleContactsModal: React.FC<GoogleContactsModalProps> = ({
   }, [isOpen]);
 
   const checkAuthStatus = async () => {
-    const token = await GoogleContactsService.getAccessToken();
+    const token = GoogleContactsService.getAccessToken();
     const currentUser = auth.currentUser;
     if (token && currentUser) {
       setIsAuthenticated(true);
       setUserEmail(currentUser.email);
       handleFetchContacts();
+    } else if (currentUser) {
+      // User is logged in to Firebase but needs token refresh for People API
+      setIsAuthenticated(true);
+      setUserEmail(currentUser.email);
+      handleFetchContacts();
     } else {
       setIsAuthenticated(false);
-      setUserEmail(currentUser?.email || null);
+      setUserEmail(null);
     }
+  };
+
+  const handleLoadDemoGmailContacts = () => {
+    const demoContacts: Contact[] = [
+      {
+        id: `google-demo-${Date.now()}-1`,
+        name: 'রাশেদ খান (Gmail)',
+        phone: '+8801712345678',
+        email: 'rashed.khan@gmail.com',
+        tag: 'Google',
+        storageLocation: 'google',
+        isFavorite: true,
+        note: 'Google Contacts ও Gmail থেকে সিঙ্ক করা',
+      },
+      {
+        id: `google-demo-${Date.now()}-2`,
+        name: 'সাকিব আল হাসান (Personal)',
+        phone: '+8801819988776',
+        email: 'shakib.75@gmail.com',
+        company: 'Cricket Operations',
+        tag: 'Google',
+        storageLocation: 'google',
+        isFavorite: false,
+        note: 'Gmail Other Contacts থেকে সিঙ্ক করা',
+      },
+      {
+        id: `google-demo-${Date.now()}-3`,
+        name: 'তানভীর আহমেদ (Office)',
+        phone: '+8801911223344',
+        email: 'tanvir.work@gmail.com',
+        company: 'Fintech Solutions',
+        tag: 'Google',
+        storageLocation: 'google',
+        isFavorite: false,
+        note: 'Google Contacts থেকে সিঙ্ক করা',
+      },
+    ];
+    setGoogleContacts(demoContacts);
+    setSelectedIds(new Set(demoContacts.map((c) => c.id)));
+    setSuccessMessage(
+      isBn
+        ? 'পরীক্ষার জন্য ৩টি গুগল ও জিমেইল কন্টাক্ট প্রস্তুত করা হয়েছে। নিচে "ইমপোর্ট করুন" বাটনে চাপুন।'
+        : 'Prepared 3 demo Google & Gmail contacts for testing. Click Import below.'
+    );
   };
 
   const handleSignInAndFetch = async () => {
@@ -73,7 +122,22 @@ export const GoogleContactsModal: React.FC<GoogleContactsModalProps> = ({
       setUserEmail(res.user.email);
       await handleFetchContacts();
     } catch (err: any) {
-      setErrorMessage(err.message || 'Google Contacts সাইন-ইনে সমস্যা হয়েছে।');
+      const isClosed =
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.code === 'auth/popup-blocked' ||
+        err?.message?.includes('popup-closed-by-user') ||
+        err?.message?.includes('cancelled-popup-request') ||
+        err?.message?.includes('popup-blocked');
+      if (isClosed) {
+        setErrorMessage(
+          isBn
+            ? 'লগইন উইন্ডো বন্ধ বা ব্লক করা হয়েছে। অনুগ্রহ করে পপআপ অনুমোদিত কিনা দেখে পুনরায় চেষ্টা করুন।'
+            : 'Sign-in window was closed or blocked. Please ensure popups are allowed and try again.'
+        );
+      } else {
+        setErrorMessage(err.message || (isBn ? 'Google Contacts সাইন-ইনে সমস্যা হয়েছে।' : 'Failed to sign in to Google Contacts.'));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +166,22 @@ export const GoogleContactsModal: React.FC<GoogleContactsModalProps> = ({
           : `Loaded ${contacts.length} contacts from Google Contacts!`
       );
     } catch (err: any) {
-      setErrorMessage(err.message || 'কন্টাক্ট লোড করতে সমস্যা হয়েছে।');
+      const isClosed =
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.code === 'auth/popup-blocked' ||
+        err?.message?.includes('popup-closed-by-user') ||
+        err?.message?.includes('cancelled-popup-request') ||
+        err?.message?.includes('popup-blocked');
+      if (isClosed) {
+        setErrorMessage(
+          isBn
+            ? 'সাইন-ইন উইন্ডো বন্ধ করা হয়েছে।'
+            : 'Sign-in window was closed.'
+        );
+      } else {
+        setErrorMessage(err.message || (isBn ? 'কন্টাক্ট লোড করতে সমস্যা হয়েছে।' : 'Failed to load contacts.'));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -305,14 +384,36 @@ export const GoogleContactsModal: React.FC<GoogleContactsModalProps> = ({
                     <span>{isBn ? 'গুগল থেকে কন্টাক্ট সংগ্রহ করা হচ্ছে...' : 'Fetching Google contacts...'}</span>
                   </div>
                 ) : filteredContacts.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-neutral-500 dark:text-neutral-400">
-                    {googleContacts.length === 0
-                      ? isBn
-                        ? 'আপনার গুগল অ্যাকাউন্টে কোনো কন্টাক্ট পাওয়া যায়নি।'
-                        : 'No contacts found in your Google Account.'
-                      : isBn
-                      ? 'কোনো কন্টাক্ট মিল পাওয়া যায়নি।'
-                      : 'No matching contacts found.'}
+                  <div className="py-6 text-center text-xs text-neutral-500 dark:text-neutral-400 space-y-3">
+                    <p>
+                      {googleContacts.length === 0
+                        ? isBn
+                          ? 'আপনার গুগল ও জিমেইল অ্যাকাউন্টে কোনো কন্টাক্ট পাওয়া যায়নি।'
+                          : 'No contacts found in your Google or Gmail Account.'
+                        : isBn
+                        ? 'কোনো কন্টাক্ট মিল পাওয়া যায়নি।'
+                        : 'No matching contacts found.'}
+                    </p>
+                    {googleContacts.length === 0 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleLoadDemoGmailContacts}
+                          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-xs transition active:scale-95"
+                        >
+                          {isBn ? 'টেস্ট জিমেইল কন্টাক্ট যোগ করুন' : 'Load Sample Gmail Contacts'}
+                        </button>
+                        <a
+                          href="https://contacts.google.com"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-medium text-xs flex items-center gap-1 transition"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>contacts.google.com</span>
+                        </a>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   filteredContacts.map((c) => {

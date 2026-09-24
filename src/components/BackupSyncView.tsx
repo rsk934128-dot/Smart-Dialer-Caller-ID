@@ -221,8 +221,18 @@ export const BackupSyncView: React.FC<BackupSyncViewProps> = ({
       }, 500);
     } catch (e: unknown) {
       const err = e instanceof Error ? e.message : String(e);
-      if (!err.includes('popup-closed-by-user')) {
+      const code = typeof e === 'object' && e !== null && 'code' in e ? (e as any).code : '';
+      const isClosed =
+        code === 'auth/popup-closed-by-user' ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/popup-blocked' ||
+        err.includes('popup-closed-by-user') ||
+        err.includes('cancelled-popup-request') ||
+        err.includes('popup-blocked');
+      if (!isClosed) {
         setErrorMsg(isBn ? `সাইন ইন ব্যর্থ হয়েছে: ${err}` : `Sign-in failed: ${err}`);
+      } else {
+        setErrorMsg(isBn ? 'সাইন-ইন পপআপ বন্ধ বা বাতিল করা হয়েছে।' : 'Sign-in popup was cancelled or closed.');
       }
     } finally {
       setIsLoggingIn(false);

@@ -439,6 +439,17 @@ export class RoomDatabaseService {
       smsDao.count(),
     ]);
 
+    const approximateSizeKb = Math.max(
+      12,
+      Math.round(
+        contactsCount * 0.3 +
+          callLogsCount * 0.2 +
+          spamCount * 0.15 +
+          callerIdCacheCount * 0.2 +
+          (messagesCount || 0) * 0.35
+      )
+    );
+
     return {
       contactsCount,
       callLogsCount,
@@ -447,6 +458,8 @@ export class RoomDatabaseService {
       messagesCount,
       isInitialized: this.isInitialized,
       lastLookupTimeMs: this.lastLookupTimeMs,
+      version: 3,
+      approximateSizeKb,
     };
   }
 

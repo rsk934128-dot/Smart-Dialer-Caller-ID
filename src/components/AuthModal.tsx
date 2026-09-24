@@ -67,8 +67,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }, 1200);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('popup-closed-by-user')) {
-        setErrorMessage(isBn ? 'লগইন পপআপ বন্ধ করা হয়েছে।' : 'Sign-in popup closed by user.');
+      const code = typeof err === 'object' && err !== null && 'code' in err ? (err as any).code : '';
+      if (
+        code === 'auth/popup-closed-by-user' ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/popup-blocked' ||
+        msg.includes('popup-closed-by-user') ||
+        msg.includes('cancelled-popup-request') ||
+        msg.includes('popup-blocked')
+      ) {
+        setErrorMessage(
+          isBn
+            ? 'লগইন পপআপ বন্ধ করা হয়েছে বা পপআপ ব্লক রয়েছে। পপআপ অনুমোদিত কিনা দেখে পুনরায় চেষ্টা করুন।'
+            : 'Sign-in popup was closed or blocked. Please ensure popups are allowed and try again.'
+        );
       } else {
         setErrorMessage(
           isBn

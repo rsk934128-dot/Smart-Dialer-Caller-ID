@@ -4,10 +4,12 @@ import {
   Clock,
   Users,
   Shield,
+  ShieldCheck,
   BookOpen,
   Phone,
   BarChart3,
   MessageSquare,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   Contact,
@@ -31,6 +33,7 @@ import {
 import { roomDbService } from './db/roomDatabaseService';
 
 import { Header } from './components/Header';
+import { SidebarDrawer } from './components/SidebarDrawer';
 import { Keypad } from './components/Keypad';
 import { CallLogs } from './components/CallLogs';
 import { ContactsView } from './components/ContactsView';
@@ -45,6 +48,7 @@ import { DefaultCallPermissionModal } from './components/DefaultCallPermissionMo
 import { DefaultCallPermissionBanner } from './components/DefaultCallPermissionBanner';
 import { MessagesView } from './components/MessagesView';
 import { IncomingSmsBanner } from './components/IncomingSmsBanner';
+import { FintechSecurityDashboard } from './components/FintechSecurityDashboard';
 import { callPermissionService } from './services/callPermissionService';
 import { smsService } from './services/smsService';
 import { getInitialTheme, applyTheme, ThemeMode } from './utils/theme';
@@ -87,8 +91,9 @@ export default function App() {
     setIsPermissionModalOpen(true);
   };
 
-  // Tab State
+  // Tab & Navigation State
   const [activeTab, setActiveTab] = useState<AppTab>('keypad');
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
   // SMS State
   const [activeSmsThreadPhone, setActiveSmsThreadPhone] = useState<string | null>(null);
@@ -699,7 +704,7 @@ export default function App() {
       {/* Mobile container centered frame */}
       <div
         id="phone-frame-wrapper"
-        className="w-full max-w-md bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] shadow-2xl flex flex-col h-screen overflow-hidden border-x border-[var(--color-border)] transition-colors duration-200"
+        className="w-full max-w-md bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] shadow-2xl flex flex-col h-[100dvh] max-h-[100dvh] overflow-hidden border-x border-[var(--color-border)] transition-colors duration-200 relative"
       >
         {/* Header */}
         <Header
@@ -717,6 +722,7 @@ export default function App() {
           onOpenBackup={() => handleOpenPermissionModal('backup')}
           theme={theme}
           onToggleTheme={handleToggleTheme}
+          onOpenSidebar={() => setIsSidebarOpen(true)}
         />
 
         {/* Default Phone App Permission Status Banner */}
@@ -829,120 +835,162 @@ export default function App() {
               onSimulateIncoming={handleSimulateIncoming}
             />
           )}
+
+          {activeTab === 'fintech-security' && (
+            <FintechSecurityDashboard lang={lang} />
+          )}
         </main>
 
-        {/* Bottom Navigation Bar */}
+        {/* Mobile-Optimized Bottom Navigation Bar (4 Core Tabs + All Programs Hub) */}
         <nav
           id="app-bottom-nav"
-          className="h-16 px-1 bg-[var(--color-nav-bg)] border-t border-[var(--color-border)] flex items-center justify-between shrink-0 select-none z-10 transition-colors duration-200"
+          className="h-16 px-2 bg-[var(--color-nav-bg)] border-t border-[var(--color-border)] flex items-center justify-around shrink-0 select-none z-10 transition-colors duration-200"
         >
-          {/* Keypad */}
+          {/* 1. Keypad */}
           <button
             id="nav-tab-keypad"
+            type="button"
             onClick={() => setActiveTab('keypad')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition cursor-pointer active:scale-95 ${
               activeTab === 'keypad'
                 ? 'text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
             }`}
           >
             <Grid className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">{t.tabKeypad}</span>
+            <span className="text-[10px] leading-tight truncate">{t.tabKeypad}</span>
           </button>
 
-          {/* Recents / Call Logs */}
+          {/* 2. Recents / Call Logs */}
           <button
             id="nav-tab-recents"
+            type="button"
             onClick={() => setActiveTab('recents')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition relative ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition relative cursor-pointer active:scale-95 ${
               activeTab === 'recents'
                 ? 'text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
             }`}
           >
-            <Clock className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">{t.tabRecents}</span>
-            {callLogs.some((l) => l.type === 'missed') && (
-              <span className="absolute top-1 right-3 w-1.5 h-1.5 rounded-full bg-rose-500" />
-            )}
+            <div className="relative">
+              <Clock className="w-4 h-4 mb-0.5" />
+              {callLogs.some((l) => l.type === 'missed') && (
+                <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[var(--color-nav-bg)]" />
+              )}
+            </div>
+            <span className="text-[10px] leading-tight truncate">{t.tabRecents}</span>
           </button>
 
-          {/* Contacts */}
+          {/* 3. Contacts */}
           <button
             id="nav-tab-contacts"
+            type="button"
             onClick={() => setActiveTab('contacts')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition cursor-pointer active:scale-95 ${
               activeTab === 'contacts'
                 ? 'text-emerald-600 dark:text-emerald-400 font-bold'
                 : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
             }`}
           >
             <Users className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">{t.tabContacts}</span>
+            <span className="text-[10px] leading-tight truncate">{t.tabContacts}</span>
           </button>
 
-          {/* Messages (Google Messages & Offline SMS) */}
+          {/* 4. Messages (Google Messages & Offline SMS) */}
           <button
             id="nav-tab-messages"
+            type="button"
             onClick={() => setActiveTab('messages')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition relative ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition relative cursor-pointer active:scale-95 ${
               activeTab === 'messages'
                 ? 'text-blue-600 dark:text-blue-400 font-bold'
                 : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
             }`}
           >
-            <MessageSquare className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">{t.tabMessages}</span>
-            {unreadSmsCount > 0 && (
-              <span className="absolute top-1 right-2 min-w-[15px] h-3.5 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
-                {unreadSmsCount > 9 ? '9+' : unreadSmsCount}
-              </span>
-            )}
+            <div className="relative">
+              <MessageSquare className="w-4 h-4 mb-0.5" />
+              {unreadSmsCount > 0 && (
+                <span className="absolute -top-1 -right-2 min-w-[14px] h-3 px-0.5 rounded-full bg-blue-600 text-white text-[8px] font-bold flex items-center justify-center">
+                  {unreadSmsCount > 9 ? '9+' : unreadSmsCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] leading-tight truncate">{t.tabMessages}</span>
           </button>
 
-          {/* Smart Caller ID */}
-          <button
-            id="nav-tab-callerid"
-            onClick={() => setActiveTab('callerid')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
-              activeTab === 'callerid'
-                ? 'text-cyan-600 dark:text-cyan-400 font-bold'
-                : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
-            }`}
-          >
-            <Shield className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">{t.tabCallerId}</span>
-          </button>
+          {/* 5. All Programs / Menu Hub Trigger */}
+          {(() => {
+            const isSecondaryTab = ['fintech-security', 'callerid', 'stats', 'android-guide'].includes(activeTab);
 
-          {/* Statistics Dashboard */}
-          <button
-            id="nav-tab-stats"
-            onClick={() => setActiveTab('stats')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
-              activeTab === 'stats'
-                ? 'text-emerald-600 dark:text-emerald-400 font-bold'
-                : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">{t.tabStats}</span>
-          </button>
+            let IconComponent = LayoutGrid;
+            let label = t.tabAllPrograms || (lang === 'bn' ? 'সকল প্রোগ্রাম' : 'All Programs');
+            let activeColor = 'text-emerald-600 dark:text-emerald-400';
 
-          {/* Android Architecture Guide */}
-          <button
-            id="nav-tab-android-guide"
-            onClick={() => setActiveTab('android-guide')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
-              activeTab === 'android-guide'
-                ? 'text-emerald-600 dark:text-emerald-400 font-bold'
-                : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
-            }`}
-          >
-            <BookOpen className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">{t.tabAndroidGuide}</span>
-          </button>
+            if (activeTab === 'fintech-security') {
+              IconComponent = ShieldCheck;
+              label = t.tabFintechSecurity || (lang === 'bn' ? 'সিকিউরিটি' : 'FinTech');
+              activeColor = 'text-teal-600 dark:text-teal-400';
+            } else if (activeTab === 'callerid') {
+              IconComponent = Shield;
+              label = t.tabCallerId || (lang === 'bn' ? 'স্মার্ট আইডি' : 'Caller ID');
+              activeColor = 'text-cyan-600 dark:text-cyan-400';
+            } else if (activeTab === 'stats') {
+              IconComponent = BarChart3;
+              label = t.tabStats || (lang === 'bn' ? 'পরিসংখ্যান' : 'Stats');
+              activeColor = 'text-violet-600 dark:text-violet-400';
+            } else if (activeTab === 'android-guide') {
+              IconComponent = BookOpen;
+              label = t.tabAndroidGuide || (lang === 'bn' ? 'গাইড' : 'Guide');
+              activeColor = 'text-emerald-700 dark:text-emerald-300';
+            }
+
+            return (
+              <button
+                id="nav-tab-all-programs"
+                type="button"
+                onClick={() => setIsSidebarOpen(true)}
+                className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition relative cursor-pointer active:scale-95 ${
+                  isSecondaryTab
+                    ? `${activeColor} font-bold`
+                    : 'text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 font-medium'
+                }`}
+                title={label}
+              >
+                <div className="relative">
+                  <IconComponent className="w-4 h-4 mb-0.5" />
+                  <span className="absolute -top-0.5 -right-1 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+                <span className="text-[10px] leading-tight truncate max-w-[64px]">
+                  {label}
+                </span>
+              </button>
+            );
+          })()}
         </nav>
       </div>
+
+      {/* 0. Mobile Sidebar Drawer (Houses all 8 programs, test simulation callers, system tools, and settings) */}
+      <SidebarDrawer
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab)}
+        lang={lang}
+        onToggleLang={() => setLang((prev) => (prev === 'bn' ? 'en' : 'bn'))}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        isDefaultDialer={isDefaultDialer}
+        onOpenPermissionModal={handleOpenPermissionModal}
+        onSimulateIncoming={handleSimulateIncoming}
+        syncStatus={syncStatus}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onOpenBackup={() => handleOpenPermissionModal('backup')}
+        contactsCount={contacts.length}
+        callLogsCount={callLogs.length}
+        missedCallsCount={callLogs.filter((l) => l.type === 'missed').length}
+        unreadSmsCount={unreadSmsCount}
+        blockedCount={blockedPhones.length}
+      />
 
       {/* 1. Floating Caller ID Overlay (SYSTEM_ALERT_WINDOW simulation) */}
       {activeCall &&

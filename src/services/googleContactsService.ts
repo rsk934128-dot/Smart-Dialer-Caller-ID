@@ -1,4 +1,4 @@
-import { User, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { User, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { Contact } from '../types';
 
@@ -24,13 +24,28 @@ WORKSPACE_CONTACT_SCOPES.forEach((scope) => {
   }
 });
 
+// Cache the access token strictly in-memory per Google Workspace Integration guidelines
 let cachedAccessToken: string | null = null;
+let isSigningIn = false;
+
+// Clear in-memory token on auth state change / sign-out
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    cachedAccessToken = null;
+  }
+});
+
+if (typeof window !== 'undefined') {
+  (window as any).__setGoogleAccessToken = (token: string | null) => {
+    cachedAccessToken = token;
+  };
+}
 
 export class GoogleContactsService {
   /**
-   * Get cached token or attempt to prompt sign in
+   * Get cached token from memory
    */
-  public static async getAccessToken(): Promise<string | null> {
+  public static getAccessToken(): string | null {
     return cachedAccessToken;
   }
 
@@ -38,78 +53,213 @@ export class GoogleContactsService {
     cachedAccessToken = token;
   }
 
+  public static hasAccessToken(): boolean {
+    return !!cachedAccessToken;
+  }
+
   /**
    * Sign in with Google with Contacts scopes
    */
   public static async signInWithGoogleContacts(): Promise<{ user: User; accessToken: string }> {
-    const result = await signInWithPopup(auth, googleProvider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Google OAuth Access Token পাওয়া যায়নি। অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
+    try {
+      isSigningIn = true;
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (!credential?.accessToken) {
+        throw new Error('Google OAuth Access Token পাওয়া যায়নি। অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
+      }
+      cachedAccessToken = credential.accessToken;
+      return { user: result.user, accessToken: cachedAccessToken };
+    } catch (err: any) {
+      const isClosed =
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.code === 'auth/popup-blocked' ||
+        err?.message?.includes('popup-closed-by-user') ||
+        err?.message?.includes('cancelled-popup-request') ||
+        err?.message?.includes('popup-blocked');
+      if (isClosed) {
+        console.info('Google Contacts sign-in popup closed by user.');
+      } else {
+        console.warn('Google Contacts sign-in notice:', err?.message || err);
+      }
+      throw err;
+    } finally {
+      isSigningIn = false;
     }
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
   }
 
   /**
-   * Fetch contacts from Google People API
+   * Fetch contacts from both Google People API (saved contacts) AND Other Contacts (Gmail interactions)
    */
   public static async fetchGoogleContacts(): Promise<Contact[]> {
-    if (!cachedAccessToken) {
+    let token = this.getAccessToken();
+    if (!token) {
       const signInRes = await this.signInWithGoogleContacts();
-      cachedAccessToken = signInRes.accessToken;
+      token = signInRes.accessToken;
     }
-
-    const personFields = 'names,phoneNumbers,emailAddresses,organizations,userDefined,photos';
-    const pageSize = 100;
-    const url = `https://people.googleapis.com/v1/people/me/connections?personFields=${personFields}&pageSize=${pageSize}&sortOrder=FIRST_NAME_ASCENDING`;
-
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${cachedAccessToken}`,
-        Accept: 'application/json',
-      },
-    });
-
-    if (response.status === 401) {
-      cachedAccessToken = null;
-      throw new Error('Google সেশন শেষ হয়েছে। অনুগ্রহ করে পুনরায় সাইন-ইন করুন।');
-    }
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const message = errorData?.error?.message || `Google People API Error: ${response.statusText}`;
-      throw new Error(message);
-    }
-
-    const data = await response.json();
-    const connections = data.connections || [];
 
     const contacts: Contact[] = [];
+    const seenPhoneOrKey = new Set<string>();
 
-    for (const person of connections) {
-      const resourceName = person.resourceName || `people/c-${Date.now()}`;
-      const name = person.names?.[0]?.displayName || person.names?.[0]?.givenName || 'নামহীন কন্টাক্ট';
-      const phoneNumbers = person.phoneNumbers || [];
-      const primaryPhone = phoneNumbers.find((p: any) => p.metadata?.primary)?.value || phoneNumbers[0]?.value || '';
-      const email = person.emailAddresses?.[0]?.value || undefined;
-      const company = person.organizations?.[0]?.name || undefined;
-      const avatar = person.photos?.[0]?.url || undefined;
+    // 1. Fetch Google Main Contacts (people/me/connections)
+    try {
+      const personFields = 'names,phoneNumbers,emailAddresses,organizations,userDefined,photos';
+      const pageSize = 1000;
+      const connectionsUrl = `https://people.googleapis.com/v1/people/me/connections?personFields=${personFields}&pageSize=${pageSize}&sortOrder=FIRST_NAME_ASCENDING`;
 
-      if (!primaryPhone && !name) continue;
-
-      contacts.push({
-        id: `google-${resourceName.replace('/', '-')}`,
-        name: name,
-        phone: primaryPhone || 'নম্বর নেই',
-        email,
-        company,
-        avatar,
-        tag: 'Google',
-        storageLocation: 'device',
-        isFavorite: false,
-        note: 'Google Contacts থেকে সিঙ্ক করা',
+      const response = await fetch(connectionsUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
       });
+
+      if (response.status === 401) {
+        this.setAccessToken(null);
+        throw new Error('Google সেশন শেষ হয়েছে। অনুগ্রহ করে পুনরায় সাইন-ইন করুন।');
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        const connections = data.connections || [];
+
+        for (const person of connections) {
+          const resourceName = person.resourceName || `people/c-${Date.now()}-${Math.random()}`;
+          const name =
+            person.names?.[0]?.displayName ||
+            person.names?.[0]?.givenName ||
+            'নামহীন গুগল কন্টাক্ট';
+          const email = person.emailAddresses?.[0]?.value || undefined;
+          const company = person.organizations?.[0]?.name || undefined;
+          const avatar = person.photos?.[0]?.url || undefined;
+          const phoneNumbers = person.phoneNumbers || [];
+
+          if (phoneNumbers.length > 0) {
+            // Add primary or distinct phone numbers
+            for (let i = 0; i < phoneNumbers.length; i++) {
+              const rawPhone = phoneNumbers[i]?.value || '';
+              if (!rawPhone) continue;
+              const cleanDigits = rawPhone.replace(/\D/g, '');
+              const dedupKey = cleanDigits || rawPhone;
+              if (seenPhoneOrKey.has(dedupKey)) continue;
+              seenPhoneOrKey.add(dedupKey);
+
+              const contactId = `google-${resourceName.replace('/', '-')}${i > 0 ? `-${i}` : ''}`;
+              contacts.push({
+                id: contactId,
+                name: phoneNumbers.length > 1 && i > 0 ? `${name} (${phoneNumbers[i].type || '২'})` : name,
+                phone: rawPhone,
+                email,
+                company,
+                avatar,
+                tag: 'Google',
+                storageLocation: 'google',
+                isFavorite: false,
+                note: 'Google Contacts থেকে সিঙ্ক করা',
+              });
+            }
+          } else if (email) {
+            // Contact has name & email from Google
+            const dedupKey = email.toLowerCase();
+            if (!seenPhoneOrKey.has(dedupKey)) {
+              seenPhoneOrKey.add(dedupKey);
+              contacts.push({
+                id: `google-${resourceName.replace('/', '-')}`,
+                name,
+                phone: 'নম্বর নেই',
+                email,
+                company,
+                avatar,
+                tag: 'Google',
+                storageLocation: 'google',
+                isFavorite: false,
+                note: 'Google Contacts (Gmail) থেকে সিঙ্ক করা',
+              });
+            }
+          }
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.warn('Google connections fetch notice:', errorData);
+      }
+    } catch (e: any) {
+      if (e.message?.includes('Google সেশন শেষ হয়েছে')) {
+        throw e;
+      }
+      console.warn('Google People connections notice:', e);
+    }
+
+    // 2. Fetch Gmail Other Contacts (people interacted with via Gmail)
+    try {
+      const otherUrl = `https://people.googleapis.com/v1/otherContacts?readMask=names,phoneNumbers,emailAddresses,photos&pageSize=1000`;
+      const otherRes = await fetch(otherUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      if (otherRes.ok) {
+        const otherData = await otherRes.json();
+        const otherList = otherData.otherContacts || [];
+
+        for (const person of otherList) {
+          const resourceName = person.resourceName || `otherContacts/c-${Date.now()}-${Math.random()}`;
+          const name =
+            person.names?.[0]?.displayName ||
+            person.names?.[0]?.givenName ||
+            person.emailAddresses?.[0]?.value?.split('@')[0] ||
+            'Gmail পরিচিতি';
+          const email = person.emailAddresses?.[0]?.value || undefined;
+          const avatar = person.photos?.[0]?.url || undefined;
+          const phoneNumbers = person.phoneNumbers || [];
+
+          if (phoneNumbers.length > 0) {
+            for (let i = 0; i < phoneNumbers.length; i++) {
+              const rawPhone = phoneNumbers[i]?.value || '';
+              if (!rawPhone) continue;
+              const cleanDigits = rawPhone.replace(/\D/g, '');
+              const dedupKey = cleanDigits || rawPhone;
+              if (seenPhoneOrKey.has(dedupKey)) continue;
+              seenPhoneOrKey.add(dedupKey);
+
+              contacts.push({
+                id: `gmail-${resourceName.replace('/', '-')}${i > 0 ? `-${i}` : ''}`,
+                name: phoneNumbers.length > 1 && i > 0 ? `${name} (${phoneNumbers[i].type || '২'})` : name,
+                phone: rawPhone,
+                email,
+                avatar,
+                tag: 'Google',
+                storageLocation: 'google',
+                isFavorite: false,
+                note: 'Gmail (Other Contacts) থেকে সিঙ্ক করা',
+              });
+            }
+          } else if (email) {
+            const dedupKey = email.toLowerCase();
+            if (!seenPhoneOrKey.has(dedupKey)) {
+              seenPhoneOrKey.add(dedupKey);
+              contacts.push({
+                id: `gmail-${resourceName.replace('/', '-')}`,
+                name,
+                phone: 'নম্বর নেই',
+                email,
+                avatar,
+                tag: 'Google',
+                storageLocation: 'google',
+                isFavorite: false,
+                note: 'Gmail কন্টাক্ট থেকে সিঙ্ক করা',
+              });
+            }
+          }
+        }
+      } else {
+        const otherErr = await otherRes.json().catch(() => ({}));
+        console.warn('Gmail otherContacts fetch notice:', otherErr);
+      }
+    } catch (e: any) {
+      console.warn('Gmail otherContacts fetch warning:', e);
     }
 
     return contacts;

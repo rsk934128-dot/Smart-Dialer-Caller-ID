@@ -3,6 +3,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
+import {
+  inspectClientNetwork,
+  securityDb,
+  calculateFintechRisk,
+  dispatchTelegramSecurityAlert,
+  SecurityAlertRecord,
+} from './src/server/fintechSecurityService.ts';
 
 dotenv.config();
 
@@ -243,6 +250,246 @@ Return ONLY valid JSON according to the schema.`,
       warning: error.message || 'Gemini API call encountered an error. Applied smart fallback.',
     });
   }
+});
+
+// ==========================================
+// FINTECH SECURITY & SIM/IP DETECTION APIS
+// ==========================================
+
+/**
+ * GET /api/security/client-info
+ * Returns real-time IP, carrier ASN intelligence, and proxy header analysis
+ */
+app.get('/api/security/client-info', (req: Request, res: Response) => {
+  const simulatedIp = req.query.simulatedIp as string | undefined;
+  const inspection = inspectClientNetwork(req, simulatedIp);
+  res.json({
+    success: true,
+    clientIp: inspection.ip,
+    carrier: inspection.carrier,
+    asn: inspection.asn,
+    operatorType: inspection.operatorType,
+    isMobile: inspection.isMobile,
+    isVpnOrProxy: inspection.isVpnOrProxy,
+    country: inspection.country,
+    city: inspection.city,
+    proxyHeaders: inspection.proxyHeadersFound,
+  });
+});
+
+/**
+ * GET /api/security/sim-state
+ * Returns current SIM card binding state and swap detection flag
+ */
+app.get('/api/security/sim-state', (_req: Request, res: Response) => {
+  const simState = securityDb.getSimState();
+  const user = securityDb.getUser();
+  res.json({
+    success: true,
+    simState,
+    user: {
+      name: user.name,
+      phone: user.phone,
+      riskTier: user.riskTier,
+      lastSimChangeTimestamp: user.lastSimChangeTimestamp,
+    },
+  });
+});
+
+/**
+ * POST /api/security/sim-swap
+ * Triggers simulated SIM swap detection
+ */
+app.post('/api/security/sim-swap', (req: Request, res: Response) => {
+  const { newCarrier } = req.body || {};
+  const updatedSim = securityDb.triggerSimSwap(newCarrier || 'Robi 4G (Swapped SIM)');
+  res.json({
+    success: true,
+    message: 'SIM card swap event triggered and flagged in security engine',
+    simState: updatedSim,
+  });
+});
+
+/**
+ * POST /api/security/sim-reset
+ * Resets SIM card state to active/safe
+ */
+app.post('/api/security/sim-reset', (_req: Request, res: Response) => {
+  const restoredSim = securityDb.resetSimState();
+  res.json({
+    success: true,
+    message: 'SIM status restored to verified primary card',
+    simState: restoredSim,
+  });
+});
+
+/**
+ * GET /api/security/alerts
+ * Returns security incidents and alerts
+ */
+app.get('/api/security/alerts', (_req: Request, res: Response) => {
+  const alerts = securityDb.getAlerts();
+  res.json({
+    success: true,
+    alerts,
+  });
+});
+
+/**
+ * GET /api/security/transactions
+ * Returns transaction audit history
+ */
+app.get('/api/security/transactions', (_req: Request, res: Response) => {
+  const transactions = securityDb.getTransactions();
+  res.json({
+    success: true,
+    transactions,
+  });
+});
+
+/**
+ * POST /api/security/process-transaction
+ * Evaluates real-time risk score and takes action: ALLOW, REQUIRE_2FA_OTP, HOLD, BLOCK
+ */
+app.post('/api/security/process-transaction', async (req: Request, res: Response) => {
+  const {
+    amount = 5000,
+    currency = 'BDT',
+    channel = 'BKASH',
+    recipient = '01712000000',
+    deviceHash,
+    simulatedIp,
+    forceSimSwap,
+  } = req.body || {};
+
+  const user = securityDb.getUser();
+  const simState = securityDb.getSimState();
+  const inspection = inspectClientNetwork(req, simulatedIp);
+
+  const isSwapped = Boolean(forceSimSwap || simState.isSimSwapSuspected);
+  let minutesAgo = undefined;
+  if (simState.swappedAt) {
+    minutesAgo = (Date.now() - simState.swappedAt) / (1000 * 60);
+  }
+
+  const assessment = calculateFintechRisk({
+    userId: user.id,
+    amount: Number(amount),
+    deviceHash,
+    clientIpInspection: inspection,
+    isSimSwapSuspected: isSwapped,
+    simSwappedMinutesAgo: minutesAgo,
+  });
+
+  // Record transaction in audit log
+  const txRecord = securityDb.addTransaction({
+    userId: user.id,
+    userName: user.name,
+    userPhone: user.phone,
+    amount: Number(amount),
+    currency: String(currency),
+    channel: String(channel),
+    recipient: String(recipient),
+    clientIp: inspection.ip,
+    carrier: inspection.carrier,
+    asn: inspection.asn,
+    riskScore: assessment.riskScore,
+    decision: assessment.decision,
+    reasons: assessment.reasons,
+    simSwapped: isSwapped,
+    vpnDetected: inspection.isVpnOrProxy,
+  });
+
+  // If high risk or blocked, trigger security alert & Telegram dispatch
+  let telegramResult = undefined;
+  if (assessment.riskScore >= 60 || assessment.decision === 'BLOCK_FRAUD') {
+    const alert = securityDb.createAlert({
+      userId: user.id,
+      userName: user.name,
+      userPhone: user.phone,
+      severity: assessment.riskScore >= 80 ? 'CRITICAL' : 'HIGH',
+      alertType: isSwapped ? 'SIM_SWAP_DETECTED' : 'UNUSUAL_IP_CARRIER',
+      title:
+        assessment.decision === 'BLOCK_FRAUD'
+          ? '🚫 সন্দেহজনক লেনদেন স্বয়ংক্রিয় ব্লক (Auto-Blocked Fraud)'
+          : '⚠️ সন্দেহজনক লেনদেন রিভিউতে পাঠানো হয়েছে (Transaction on Hold)',
+      description: `গ্রাহক ${user.phone} কর্তৃক ৳${amount} লেনদেনের চেষ্টায় রিস্ক স্কোর ${
+        assessment.riskScore
+      }/100 ধরা পড়েছে। কারণ: ${assessment.reasons.join(', ')}।`,
+      ipAddress: inspection.ip,
+      carrier: inspection.carrier,
+      riskScore: assessment.riskScore,
+      telegramDispatched: false,
+      isResolved: false,
+    });
+
+    telegramResult = await dispatchTelegramSecurityAlert({
+      alert,
+    });
+
+    if (telegramResult.success) {
+      alert.telegramDispatched = true;
+      alert.telegramMessageId = telegramResult.messageId;
+    }
+  }
+
+  res.json({
+    success: true,
+    transactionId: txRecord.id,
+    riskScore: assessment.riskScore,
+    decision: assessment.decision,
+    reasons: assessment.reasons,
+    timestamp: Date.now(),
+    clientIp: inspection.ip,
+    carrier: inspection.carrier,
+    asn: inspection.asn,
+    isMobileCarrier: inspection.isMobile,
+    isVpnOrProxy: inspection.isVpnOrProxy,
+    deviceMatch: true,
+    simSwapDetected: isSwapped,
+    telegramAlertSent: telegramResult?.success,
+    telegramSimulated: telegramResult?.simulated,
+  });
+});
+
+/**
+ * POST /api/security/telegram/test
+ * Test sending or simulating a Telegram security alert
+ */
+app.post('/api/security/telegram/test', async (req: Request, res: Response) => {
+  const { botToken, chatId } = req.body || {};
+  const user = securityDb.getUser();
+  const simState = securityDb.getSimState();
+
+  const testAlert: SecurityAlertRecord = {
+    id: `alt_test_${Date.now()}`,
+    timestamp: Date.now(),
+    userId: user.id,
+    userName: user.name,
+    userPhone: user.phone,
+    severity: 'CRITICAL',
+    alertType: 'SIM_SWAP_DETECTED',
+    title: '🔔 টেস্ট ফিনটেক সিকিউরিটি অ্যালার্ট (Test Telegram Webhook)',
+    description: 'এটি একটি টেস্ট অ্যালার্ট। মোবাইল ডাটা আইপি ট্র্যাকিং ও সিম চেঞ্জ সিস্টেম সফলভাবে লিংক হয়েছে।',
+    ipAddress: '103.205.18.42',
+    carrier: simState.carrierName,
+    riskScore: 92,
+    telegramDispatched: true,
+    isResolved: false,
+  };
+
+  const result = await dispatchTelegramSecurityAlert({
+    botToken,
+    chatId,
+    alert: testAlert,
+  });
+
+  res.json({
+    success: result.success,
+    simulated: result.simulated,
+    messageId: result.messageId,
+    error: result.error,
+  });
 });
 
 // Setup Vite in development or static file serving in production

@@ -15,6 +15,7 @@ import {
   Smartphone,
   ShieldCheck,
   Music,
+  RefreshCw,
 } from 'lucide-react';
 import { Contact, CallLog } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
@@ -22,6 +23,7 @@ import { searchContactsT9 } from '../utils/t9';
 import { ContactDetailSheet } from './ContactDetailSheet';
 import { SimContactsManagerModal } from './SimContactsManagerModal';
 import { GoogleContactsModal } from './GoogleContactsModal';
+import { GooglePeopleSyncService } from './GooglePeopleSyncService';
 import { callPermissionService } from '../services/callPermissionService';
 
 interface ContactsViewProps {
@@ -52,7 +54,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [isSimModalOpen, setIsSimModalOpen] = useState(false);
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
-  const [storageFilter, setStorageFilter] = useState<'all' | 'device' | 'sim1' | 'sim2'>('all');
+  const [storageFilter, setStorageFilter] = useState<'all' | 'device' | 'sim1' | 'sim2' | 'google'>('all');
   const [selectedDetailContact, setSelectedDetailContact] = useState<Contact | null>(null);
 
   // Form states for add/edit modal
@@ -63,7 +65,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   const [formCompany, setFormCompany] = useState('');
   const [formTag, setFormTag] = useState('Friend');
   const [formNote, setFormNote] = useState('');
-  const [formStorageLocation, setFormStorageLocation] = useState<'device' | 'sim1' | 'sim2'>('device');
+  const [formStorageLocation, setFormStorageLocation] = useState<'device' | 'sim1' | 'sim2' | 'google'>('device');
   const [formRingtone, setFormRingtone] = useState<string>('chime');
   const [formRingtoneLabel, setFormRingtoneLabel] = useState<string>('');
 
@@ -124,8 +126,12 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   // Count contacts by storage location
   const sim1Count = useMemo(() => contacts.filter((c) => c.storageLocation === 'sim1').length, [contacts]);
   const sim2Count = useMemo(() => contacts.filter((c) => c.storageLocation === 'sim2').length, [contacts]);
+  const googleCount = useMemo(
+    () => contacts.filter((c) => c.storageLocation === 'google' || c.tag === 'Google').length,
+    [contacts]
+  );
   const deviceCount = useMemo(
-    () => contacts.filter((c) => !c.storageLocation || c.storageLocation === 'device').length,
+    () => contacts.filter((c) => (!c.storageLocation || c.storageLocation === 'device') && c.tag !== 'Google').length,
     [contacts]
   );
 
@@ -134,11 +140,13 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
 
     // Apply storage filter
     if (storageFilter === 'device') {
-      result = result.filter((c) => !c.storageLocation || c.storageLocation === 'device');
+      result = result.filter((c) => (!c.storageLocation || c.storageLocation === 'device') && c.tag !== 'Google');
     } else if (storageFilter === 'sim1') {
       result = result.filter((c) => c.storageLocation === 'sim1');
     } else if (storageFilter === 'sim2') {
       result = result.filter((c) => c.storageLocation === 'sim2');
+    } else if (storageFilter === 'google') {
+      result = result.filter((c) => c.storageLocation === 'google' || c.tag === 'Google');
     }
 
     if (!searchQuery.trim()) return result;
@@ -248,6 +256,22 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
               <span>{isBn ? 'ফোন' : 'Phone'}</span>
               <span className="text-[10px] opacity-75 font-mono">({deviceCount})</span>
             </button>
+
+            <button
+              id="filter-google-contacts-btn"
+              onClick={() => setStorageFilter('google')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 transition ${
+                storageFilter === 'google'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+              </svg>
+              <span>{isBn ? 'Google' : 'Google'}</span>
+              <span className="text-[10px] opacity-75 font-mono">({googleCount})</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
@@ -277,6 +301,19 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Google People API Service Component */}
+      <GooglePeopleSyncService
+        contacts={contacts}
+        onContactsFetched={(imported) => {
+          if (onImportContacts) {
+            onImportContacts(imported);
+          } else {
+            imported.forEach((c) => onSaveContact(c));
+          }
+        }}
+        lang={lang}
+      />
 
       {/* Contacts List */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-4">
@@ -322,6 +359,14 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-cyan-100 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300">
                             <SimCard className="w-2.5 h-2.5" />
                             SIM 2
+                          </span>
+                        )}
+                        {(c.storageLocation === 'google' || c.tag === 'Google') && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                            <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                            </svg>
+                            Google
                           </span>
                         )}
                         {c.tag && (
@@ -419,6 +464,14 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-cyan-100 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300">
                           <SimCard className="w-2.5 h-2.5" />
                           SIM 2
+                        </span>
+                      )}
+                      {(c.storageLocation === 'google' || c.tag === 'Google') && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                          <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                          </svg>
+                          Google
                         </span>
                       )}
                       {c.company && (
@@ -581,7 +634,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                 <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 mb-1.5 block">
                   {isBn ? 'সংরক্ষণের স্থান (Storage Location)' : 'Storage Destination'}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={() => setFormStorageLocation('device')}
@@ -619,6 +672,21 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                   >
                     <SimCard className="w-4 h-4 text-cyan-600" />
                     <span className="text-[10px]">{isBn ? 'সিম ২ (BL)' : 'SIM 2'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormStorageLocation('google')}
+                    className={`p-2 rounded-xl border text-left flex flex-col items-center justify-center gap-1 transition ${
+                      formStorageLocation === 'google'
+                        ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 font-bold'
+                        : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    }`}
+                  >
+                    <svg className="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                    <span className="text-[10px]">{isBn ? 'গুগল / Gmail' : 'Google'}</span>
                   </button>
                 </div>
               </div>
