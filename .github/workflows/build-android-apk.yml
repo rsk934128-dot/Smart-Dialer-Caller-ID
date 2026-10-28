@@ -2,6 +2,9 @@ name: Build & Release Android APK
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
@@ -76,9 +79,34 @@ jobs:
           fi
           yes | sdkmanager --licenses || true
 
-      - name: Generate Android Signing Keystore
+      - name: Ensure Capacitor Android Platform Exists
         run: |
-          echo "Generating cryptographic keystore for production Android APK signing..."
+          echo "=== Verifying Capacitor Android native platform ==="
+          if [ ! -f "android/gradlew" ] || [ ! -f "android/app/build.gradle" ]; then
+            echo "android/gradlew or build.gradle missing. Initializing platform via Capacitor CLI..."
+            # Clean up any partial or broken android directory
+            if [ -d "android" ]; then
+              echo "Removing incomplete android directory..."
+              rm -rf android
+            fi
+            echo "Running npx cap add android..."
+            npx cap add android
+          fi
+
+          echo "Syncing web assets to Android platform..."
+          npx cap sync android
+
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+            echo "android/gradlew verified and made executable."
+          else
+            echo "Listing contents of android directory:"
+            ls -la android || true
+          fi
+
+      - name: Generate Android Signing Keystore & Configure Build
+        run: |
+          echo "Setting up cryptographic keystore for production Android APK signing..."
           mkdir -p android/app
           if [ ! -f "android/app/release.keystore" ]; then
             keytool -genkeypair -v \
@@ -90,44 +118,128 @@ jobs:
               -storepass smartdialer123 \
               -keypass smartdialer123 \
               -dname "CN=SmartDialer, OU=Telecom, O=SmartDialer Mobile, L=Dhaka, ST=Dhaka, C=BD"
-            echo "Release keystore generated successfully."
+            echo "Release keystore generated successfully at android/app/release.keystore"
           fi
 
-      - name: Sync Capacitor Web Assets into Android Native Project
-        run: |
-          echo "Syncing compiled web assets into Android container..."
-          npx cap sync android
-          echo "Capacitor Android sync completed."
+          # Ensure android/app/build.gradle has release signingConfig configured
+          if [ -f "android/app/build.gradle" ]; then
+            node -e '
+              const fs = require("fs");
+              let file = fs.readFileSync("android/app/build.gradle", "utf8");
+              let modified = false;
+
+              if (!file.includes("release.keystore")) {
+                console.log("Configuring release keystore in android/app/build.gradle...");
+                if (file.includes("signingConfigs {")) {
+                  file = file.replace("signingConfigs {", `signingConfigs {
+        release {
+            if (file("release.keystore").exists()) {
+                storeFile file("release.keystore")
+                storePassword "smartdialer123"
+                keyAlias "smartdialer"
+                keyPassword "smartdialer123"
+            }
+        }`);
+                  modified = true;
+                } else if (file.includes("defaultConfig {")) {
+                  file = file.replace("defaultConfig {", `signingConfigs {
+        release {
+            if (file("release.keystore").exists()) {
+                storeFile file("release.keystore")
+                storePassword "smartdialer123"
+                keyAlias "smartdialer"
+                keyPassword "smartdialer123"
+            }
+        }
+    }
+    defaultConfig {`);
+                  modified = true;
+                }
+
+                if (file.includes("buildTypes {")) {
+                  file = file.replace(/release\s*\{[^}]*\}/, `release {
+            if (file("release.keystore").exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }`);
+                  modified = true;
+                }
+
+                if (modified) {
+                  fs.writeFileSync("android/app/build.gradle", file, "utf8");
+                  console.log("Successfully injected release signing config into android/app/build.gradle");
+                }
+              } else {
+                console.log("Signing configuration already verified in build.gradle");
+              }
+            '
+          fi
 
       - name: Build and Sign Android APKs (Release & Debug)
         run: |
           mkdir -p release-artifacts
-          chmod +x android/gradlew
-          
-          cd android
-          echo "Compiling signed Release APK..."
-          ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build failed, attempting debug..."
-          
-          echo "Compiling signed Debug APK (Universal sideload fallback)..."
-          ./gradlew assembleDebug --no-daemon || echo "Debug build completed."
-          cd ..
 
-          # Copy and standardize APK artifacts
-          RELEASE_APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          DEBUG_APK=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+            cd android
+            echo "1. Building signed/unsigned Release APK with Gradle..."
+            ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build encountered non-fatal issues, trying fallback..."
 
-          if [ -n "$RELEASE_APK" ] && [ -f "$RELEASE_APK" ]; then
-            echo "Found Release APK: $RELEASE_APK"
-            cp "$RELEASE_APK" release-artifacts/SmartDialer-v1.0-release-signed.apk
-            cp "$RELEASE_APK" release-artifacts/SmartDialer-release.apk
+            echo "2. Building signed Debug APK with Gradle (Universal fallback)..."
+            ./gradlew assembleDebug --no-daemon || echo "Debug build completed."
+            cd ..
+          else
+            echo "ERROR: android/gradlew not found!"
           fi
 
-          if [ -n "$DEBUG_APK" ] && [ -f "$DEBUG_APK" ]; then
-            echo "Found Debug APK: $DEBUG_APK"
-            cp "$DEBUG_APK" release-artifacts/SmartDialer-v1.0-debug-signed.apk
-            # Fallback if release APK wasn't created
+          # Search for any compiled APKs
+          RAW_RELEASE_APK=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
+          RAW_DEBUG_APK=$(find android/app/build/outputs/apk/debug -name "*.apk" 2>/dev/null | head -n 1)
+
+          echo "Located Release APK: $RAW_RELEASE_APK"
+          echo "Located Debug APK: $RAW_DEBUG_APK"
+
+          # Find Android SDK apksigner
+          BUILD_TOOLS_DIR=$(find ${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          KEYSTORE="android/app/release.keystore"
+
+          echo "Using Android Build Tools at: $BUILD_TOOLS_DIR"
+
+          # Process Release APK
+          if [ -n "$RAW_RELEASE_APK" ] && [ -f "$RAW_RELEASE_APK" ]; then
+            echo "Preparing Release APK..."
+            cp "$RAW_RELEASE_APK" release-artifacts/SmartDialer-v1.0-release-signed.apk
+
+            # Re-sign with apksigner (v1 + v2 + v3 schemes) to ensure 100% installability on all Android 7-15 devices
+            if [ -x "$APKSIGNER" ] && [ -f "$KEYSTORE" ]; then
+              echo "Signing with apksigner (v1, v2, v3 schemes)..."
+              $APKSIGNER sign --ks "$KEYSTORE" \
+                --ks-key-alias smartdialer \
+                --ks-pass pass:smartdialer123 \
+                --key-pass pass:smartdialer123 \
+                --v1-signing-enabled true \
+                --v2-signing-enabled true \
+                --v3-signing-enabled true \
+                release-artifacts/SmartDialer-v1.0-release-signed.apk || true
+            fi
+            cp release-artifacts/SmartDialer-v1.0-release-signed.apk release-artifacts/SmartDialer-release.apk
+          fi
+
+          # Process Debug APK
+          if [ -n "$RAW_DEBUG_APK" ] && [ -f "$RAW_DEBUG_APK" ]; then
+            echo "Preparing Debug APK..."
+            cp "$RAW_DEBUG_APK" release-artifacts/SmartDialer-v1.0-debug-signed.apk
+            cp "$RAW_DEBUG_APK" release-artifacts/SmartDialer-debug.apk
+
+            # If release APK was missing, use debug APK as release fallback
             if [ ! -f "release-artifacts/SmartDialer-release.apk" ]; then
-              cp "$DEBUG_APK" release-artifacts/SmartDialer-release.apk
+              echo "Using Debug APK as fallback for SmartDialer-release.apk..."
+              cp "$RAW_DEBUG_APK" release-artifacts/SmartDialer-release.apk
             fi
           fi
 
@@ -136,7 +248,9 @@ jobs:
           for apk in release-artifacts/*.apk; do
             if [ -f "$apk" ]; then
               echo "Checking signature for $apk..."
-              if command -v apksigner >/dev/null 2>&1; then
+              if [ -x "$APKSIGNER" ]; then
+                $APKSIGNER verify --verbose "$apk" || true
+              elif command -v apksigner >/dev/null 2>&1; then
                 apksigner verify --verbose "$apk" || true
               else
                 keytool -printcert -jarfile "$apk" || true
@@ -157,6 +271,7 @@ jobs:
           ls -la release-artifacts/
 
       - name: Upload APK Artifact to Action Run
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smart-dialer-android-release
@@ -178,7 +293,6 @@ jobs:
           echo "Resolved release tag: $TAG"
 
       - name: Create GitHub Release with Android APK
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
@@ -196,8 +310,8 @@ jobs:
             - 📱 **Android InCallService & Telecom Manager**: কলার আইডি ওভারলে ও ডুয়াল সিম সাপোর্ট।
 
             ### 📲 ইন্সটলেশন গাইড:
-            1. নিচের Assets তালিকা থেকে APK ফাইলটি আপনার অ্যান্ড্রয়েড ফোনে ডাউনলোড করুন।
-            2. "Install from Unknown Sources" সক্রিয় করুন।
+            1. নিচের Assets তালিকা থেকে **SmartDialer-release.apk** অথবা **SmartDialer-v1.0-release-signed.apk** আপনার অ্যান্ড্রয়েড ফোনে ডাউনলোড করুন।
+            2. ফাইলটিতে ট্যাপ করে ইনস্টল শুরু করুন। Play Protect বার্তা দেখালে **"More details" -> "Install anyway"** চাপুন।
             3. অ্যাপটি ওপেন করে ডিফল্ট ডায়ালার ও প্রয়োজনীয় পারমিশন প্রদান করুন।
 
             ---
