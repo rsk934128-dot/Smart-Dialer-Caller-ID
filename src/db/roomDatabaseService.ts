@@ -4,8 +4,121 @@ import { callLogDao, CallLogStats } from './daos/callLogDao';
 import { spamDao } from './daos/spamDao';
 import { callerIdDao } from './daos/callerIdDao';
 import { smsDao } from './daos/smsDao';
-import { Contact, CallLog, CallerIdRecord, SpamEntity, RoomDbMetrics, SmsMessage, BackupMetadata } from '../types';
+import { callRecordingDao } from './daos/callRecordingDao';
+import {
+  Contact,
+  CallLog,
+  CallerIdRecord,
+  SpamEntity,
+  RoomDbMetrics,
+  SmsMessage,
+  BackupMetadata,
+  CallRecording,
+  AutoRecordingCategorySettings,
+} from '../types';
 import { INITIAL_CONTACTS, INITIAL_CALL_LOGS, INITIAL_SMS_MESSAGES, CALLER_ID_DATABASE, normalizePhone } from '../data/mockData';
+
+export const INITIAL_RECORDINGS: CallRecording[] = [
+  {
+    id: 'rec_fin_001',
+    phone: '+880 1712-345678',
+    contactName: 'ব্র্যাক ব্যাংক কাস্টমার সাপোর্ট',
+    contactCategory: 'financial',
+    timestamp: Date.now() - 1000 * 60 * 45, // 45m ago
+    duration: 142,
+    fileSizeKb: 420,
+    isEncrypted: true,
+    encryptionAlgorithm: 'AES-256-GCM (Android KeyStore StrongBox)',
+    encryptionKeyId: 'sec_key_fintech_master_gp',
+    cipherIv: '9f8b2c4e1a3d5e7f',
+    checksum: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    transcriptSnippet: 'অ্যাকাউন্ট ব্যালেন্স যাচাই ও ইন্টারনেট ব্যাংকিং ওটিপি ট্রানজেকশন রিকোয়েস্ট নিশ্চিতকরণ আলোচনা।',
+    callType: 'incoming',
+    audioWaveform: [30, 45, 60, 80, 65, 90, 75, 50, 85, 95, 70, 60, 80, 55, 40, 65, 70, 85, 60, 45],
+  },
+  {
+    id: 'rec_fin_002',
+    phone: '+880 1700-112233',
+    contactName: 'বিকাশ মার্চেন্ট সেটেলমেন্ট হেল্পলাইন',
+    contactCategory: 'financial',
+    timestamp: Date.now() - 1000 * 60 * 60 * 4, // 4h ago
+    duration: 86,
+    fileSizeKb: 260,
+    isEncrypted: true,
+    encryptionAlgorithm: 'AES-256-GCM (Android KeyStore StrongBox)',
+    encryptionKeyId: 'sec_key_fintech_master_gp',
+    cipherIv: '1a2b3c4d5e6f7a8b',
+    checksum: 'a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e',
+    transcriptSnippet: 'মার্চেন্ট পেমেন্ট রিফান্ড ইস্যু ও সেটেলমেন্ট রসিদ নম্বর #BK-94821 সম্পর্কিত তথ্য।',
+    callType: 'outgoing',
+    audioWaveform: [40, 55, 70, 65, 80, 75, 60, 90, 85, 70, 65, 50, 60, 75, 80, 60, 50, 45, 40, 35],
+  },
+  {
+    id: 'rec_biz_001',
+    phone: '+880 1819-988776',
+    contactName: 'সাকিব আল হাসান (Daraz Vendor)',
+    contactCategory: 'business',
+    timestamp: Date.now() - 1000 * 60 * 60 * 20, // 20h ago
+    duration: 215,
+    fileSizeKb: 650,
+    isEncrypted: true,
+    encryptionAlgorithm: 'AES-256-GCM (Android KeyStore StrongBox)',
+    encryptionKeyId: 'sec_key_fintech_master_gp',
+    cipherIv: '3c4d5e6f7a8b9c0d',
+    checksum: '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4',
+    transcriptSnippet: 'সাপ্তাহিক সাপ্লাই চেইন ডেলিভারি ইনভেন্টরি ও বাল্ক শিপমেন্ট কোটেশন সংক্রান্ত সমঝোতা।',
+    callType: 'incoming',
+    audioWaveform: [25, 40, 60, 75, 85, 90, 95, 80, 70, 65, 80, 85, 90, 75, 60, 55, 50, 45, 30, 20],
+  },
+  {
+    id: 'rec_unk_001',
+    phone: '+880 1911-223344',
+    contactName: 'অপরিচিত কলার (অফিস ইনকোয়ারি)',
+    contactCategory: 'unknown',
+    timestamp: Date.now() - 1000 * 60 * 60 * 36, // 36h ago
+    duration: 52,
+    fileSizeKb: 155,
+    isEncrypted: true,
+    encryptionAlgorithm: 'AES-256-GCM (Android KeyStore StrongBox)',
+    encryptionKeyId: 'sec_key_fintech_master_gp',
+    cipherIv: '5e6f7a8b9c0d1e2f',
+    checksum: '3a58cf09f89a9f076b6a674d812328ef72a27b8755c3c0ebc0205561a0d79b92',
+    transcriptSnippet: 'অপরিচিত নম্বর থেকে আসা পরামর্শ। সেবামূল্য ও প্রোডাক্ট ক্যাটালগ যাচাই।',
+    callType: 'incoming',
+    audioWaveform: [30, 50, 70, 60, 55, 80, 75, 70, 65, 50, 40, 35, 50, 60, 55, 45, 40, 30, 25, 20],
+  },
+  {
+    id: 'rec_spam_001',
+    phone: '+880 1300-998811',
+    contactName: 'সন্দেহজনক ভুয়া লটারি কল (Flagged Scam)',
+    contactCategory: 'spam',
+    timestamp: Date.now() - 1000 * 60 * 60 * 48, // 48h ago
+    duration: 34,
+    fileSizeKb: 110,
+    isEncrypted: true,
+    encryptionAlgorithm: 'AES-256-GCM (Android KeyStore StrongBox)',
+    encryptionKeyId: 'sec_key_fintech_master_gp',
+    cipherIv: '7a8b9c0d1e2f3a4b',
+    checksum: '5b98cf09f89a9f076b6a674d812328ef72a27b8755c3c0ebc0205561a0d79b93',
+    transcriptSnippet: 'প্রতারণামূলক কল অডিও সাক্ষ্য: বিকাশ লটারি জেতার মিথ্যা দাবি করে পিন ও ওটিপি চাওয়া হচ্ছিল। ফিনটেক সিকিউরিটি ইঞ্জিন দ্বারা রেকর্ড ও সংরক্ষিত।',
+    callType: 'incoming',
+    audioWaveform: [50, 70, 90, 85, 95, 100, 90, 80, 75, 85, 95, 90, 85, 70, 60, 50, 40, 35, 30, 20],
+  },
+];
+
+export const DEFAULT_RECORDING_SETTINGS: AutoRecordingCategorySettings = {
+  enabled: true,
+  categories: {
+    financial: true, // auto-record banking & fintech
+    business: true,  // auto-record business & clients
+    unknown: true,   // auto-record unknown callers for fraud prevention
+    spam: true,      // auto-record suspicious calls for audit logs
+    vip: false,      // optional family/VIP
+  },
+  audioFormat: 'AAC_128K',
+  autoEncrypt: true,
+  retentionDays: 60,
+};
 
 export interface OfflineLookupResult {
   record: CallerIdRecord;
@@ -37,6 +150,7 @@ export class RoomDatabaseService {
   public readonly callerId = callerIdDao;
   public readonly messages = smsDao;
   public readonly sms = smsDao;
+  public readonly recordings = callRecordingDao;
 
   /**
    * Subscribe to database state changes
@@ -136,7 +250,10 @@ export class RoomDatabaseService {
       // 5. Seed Offline Room SMS Messages
       await smsDao.bulkPut(INITIAL_SMS_MESSAGES);
 
-      // 6. Write metadata
+      // 6. Seed Encrypted Room Call Recordings
+      await callRecordingDao.bulkInsert(INITIAL_RECORDINGS);
+
+      // 7. Write metadata
       await roomDb.dbMetadata.put({
         key: 'is_seeded',
         value: 'true',
@@ -144,14 +261,18 @@ export class RoomDatabaseService {
       });
       await roomDb.dbMetadata.put({
         key: 'schema_version',
-        value: '2.0.0',
+        value: '3.0.0',
         updatedAt: Date.now(),
       });
     } else {
-      // If already seeded previously, ensure SMS messages are populated
+      // If already seeded previously, ensure SMS messages and recordings are populated
       const existingMsgCount = await smsDao.count();
       if (existingMsgCount === 0) {
         await smsDao.bulkPut(INITIAL_SMS_MESSAGES);
+      }
+      const existingRecs = await callRecordingDao.getAll(1);
+      if (existingRecs.length === 0) {
+        await callRecordingDao.bulkInsert(INITIAL_RECORDINGS);
       }
     }
 
@@ -159,6 +280,42 @@ export class RoomDatabaseService {
     const metrics = await this.getMetrics();
     this.notifyChange();
     return metrics;
+  }
+
+  /**
+   * Get Auto Call Recording Category settings
+   */
+  async getRecordingSettings(): Promise<AutoRecordingCategorySettings> {
+    try {
+      const stored = await roomDb.dbMetadata.get('auto_recording_settings');
+      if (stored?.value) {
+        return JSON.parse(stored.value);
+      }
+      const local = localStorage.getItem('smart_dialer_recording_settings');
+      if (local) {
+        return JSON.parse(local);
+      }
+    } catch (e) {
+      console.warn('Failed to load recording settings', e);
+    }
+    return DEFAULT_RECORDING_SETTINGS;
+  }
+
+  /**
+   * Save Auto Call Recording Category settings
+   */
+  async saveRecordingSettings(settings: AutoRecordingCategorySettings): Promise<void> {
+    try {
+      await roomDb.dbMetadata.put({
+        key: 'auto_recording_settings',
+        value: JSON.stringify(settings),
+        updatedAt: Date.now(),
+      });
+      localStorage.setItem('smart_dialer_recording_settings', JSON.stringify(settings));
+    } catch (e) {
+      console.error('Failed to save recording settings', e);
+    }
+    this.notifyChange();
   }
 
   /**
@@ -431,13 +588,18 @@ export class RoomDatabaseService {
    * Get overall Room database metrics and status
    */
   async getMetrics(): Promise<RoomDbMetrics> {
-    const [contactsCount, callLogsCount, spamCount, callerIdCacheCount, messagesCount] = await Promise.all([
-      contactDao.count(),
-      callLogDao.count(),
-      spamDao.count(),
-      callerIdDao.count(),
-      smsDao.count(),
-    ]);
+    const [contactsCount, callLogsCount, spamCount, callerIdCacheCount, messagesCount, recordingsList] =
+      await Promise.all([
+        contactDao.count(),
+        callLogDao.count(),
+        spamDao.count(),
+        callerIdDao.count(),
+        smsDao.count(),
+        callRecordingDao.getAll(500),
+      ]);
+
+    const recordingsCount = recordingsList.length;
+    const recordingsSizeKb = recordingsList.reduce((acc, r) => acc + (r.fileSizeKb || 0), 0);
 
     const approximateSizeKb = Math.max(
       12,
@@ -446,7 +608,8 @@ export class RoomDatabaseService {
           callLogsCount * 0.2 +
           spamCount * 0.15 +
           callerIdCacheCount * 0.2 +
-          (messagesCount || 0) * 0.35
+          (messagesCount || 0) * 0.35 +
+          recordingsSizeKb
       )
     );
 
@@ -456,6 +619,7 @@ export class RoomDatabaseService {
       spamCount,
       callerIdCacheCount,
       messagesCount,
+      recordingsCount,
       isInitialized: this.isInitialized,
       lastLookupTimeMs: this.lastLookupTimeMs,
       version: 3,

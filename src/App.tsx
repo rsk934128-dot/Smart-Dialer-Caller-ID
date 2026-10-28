@@ -787,10 +787,15 @@ export default function App() {
             <CallLogs
               logs={callLogs}
               lang={lang}
+              contacts={contacts}
               onInitiateCall={handleInitiateCall}
               onOpenAddContact={handleOpenAddContactFromNumber}
               onClearLogs={handleClearLogs}
               onReportSpam={handleReportSpam}
+              onOpenSmsThread={(phone) => {
+                setActiveSmsThreadPhone(phone);
+                setActiveTab('messages');
+              }}
             />
           )}
 

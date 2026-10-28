@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { Contact, CallLog, CallerIdRecord, SpamEntity, SmsMessage } from '../types';
+import { Contact, CallLog, CallerIdRecord, SpamEntity, SmsMessage, CallRecording } from '../types';
 
 export interface ContactDbEntity extends Contact {
   normalizedPhone: string;
@@ -22,6 +22,11 @@ export interface SmsMessageDbEntity extends SmsMessage {
   digitsOnly: string;
 }
 
+export interface CallRecordingDbEntity extends CallRecording {
+  normalizedPhone: string;
+  digitsOnly: string;
+}
+
 export interface MetadataDbEntity {
   key: string;
   value: string;
@@ -33,8 +38,8 @@ export interface MetadataDbEntity {
  * 
  * Simulates:
  * @Database(
- *   entities = [ContactEntity::class, CallLogEntity::class, SpamEntity::class, CallerIdCacheEntity::class, SmsMessageEntity::class],
- *   version = 2
+ *   entities = [ContactEntity::class, CallLogEntity::class, SpamEntity::class, CallerIdCacheEntity::class, SmsMessageEntity::class, CallRecordingEntity::class],
+ *   version = 3
  * )
  */
 export class SmartDialerRoomDB extends Dexie {
@@ -43,6 +48,7 @@ export class SmartDialerRoomDB extends Dexie {
   spamList!: EntityTable<SpamEntity, 'phone'>;
   callerIdCache!: EntityTable<CallerIdDbEntity, 'phone'>;
   messages!: EntityTable<SmsMessageDbEntity, 'id'>;
+  recordings!: EntityTable<CallRecordingDbEntity, 'id'>;
   dbMetadata!: EntityTable<MetadataDbEntity, 'key'>;
 
   constructor() {
@@ -64,6 +70,16 @@ export class SmartDialerRoomDB extends Dexie {
       callerIdCache: 'phone, normalizedPhone, digitsOnly, spamScore, verified',
       dbMetadata: 'key',
       messages: 'id, senderPhone, recipientPhone, normalizedPhone, digitsOnly, type, timestamp, status, isOtp, isSpam, simSlot',
+    });
+
+    this.version(3).stores({
+      contacts: 'id, name, phone, normalizedPhone, digitsOnly, isFavorite, tag',
+      callLogs: 'id, phone, normalizedPhone, digitsOnly, type, timestamp, isSpam',
+      spamList: 'phone, normalizedPhone, score, category, isBlocked, reportsCount',
+      callerIdCache: 'phone, normalizedPhone, digitsOnly, spamScore, verified',
+      dbMetadata: 'key',
+      messages: 'id, senderPhone, recipientPhone, normalizedPhone, digitsOnly, type, timestamp, status, isOtp, isSpam, simSlot',
+      recordings: 'id, phone, normalizedPhone, digitsOnly, contactCategory, timestamp, isEncrypted',
     });
   }
 }

@@ -245,6 +245,7 @@ export interface RoomDbMetrics {
   spamCount: number;
   callerIdCacheCount: number;
   messagesCount?: number;
+  recordingsCount?: number;
   isInitialized: boolean;
   lastLookupTimeMs?: number;
   version?: number;
@@ -263,3 +264,52 @@ export interface BackupMetadata {
   source: 'room_to_firestore';
   status: 'success' | 'failed' | 'in_progress';
 }
+
+export interface AICallContextSummary {
+  summary: string;
+  urgency: 'urgent' | 'high' | 'medium' | 'low';
+  urgencyReason: string;
+  businessIntent: string;
+  callerPatternInsight: string;
+  recommendedAction: string;
+  keyPoints: string[];
+  confidenceScore?: number;
+  source?: 'gemini_api' | 'pattern_heuristic';
+  analyzedAt: number;
+}
+
+export type RecordingCategory = 'financial' | 'business' | 'unknown' | 'spam' | 'vip';
+
+export interface CallRecording {
+  id: string;
+  phone: string;
+  contactName: string;
+  contactCategory: RecordingCategory;
+  timestamp: number;
+  duration: number; // in seconds
+  fileSizeKb: number;
+  isEncrypted: boolean;
+  encryptionAlgorithm: string; // e.g. 'AES-256-GCM (Android KeyStore)'
+  encryptionKeyId: string;
+  cipherIv: string;
+  checksum: string; // SHA-256
+  transcriptSnippet?: string;
+  callType: 'incoming' | 'outgoing';
+  audioWaveform?: number[];
+  audioDataUri?: string;
+}
+
+export interface AutoRecordingCategorySettings {
+  enabled: boolean;
+  categories: {
+    financial: boolean;
+    business: boolean;
+    unknown: boolean;
+    spam: boolean;
+    vip: boolean;
+  };
+  audioFormat: 'AAC_128K' | 'AMR_WB' | 'OPUS';
+  autoEncrypt: boolean;
+  retentionDays: number;
+}
+

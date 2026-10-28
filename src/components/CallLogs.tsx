@@ -13,31 +13,106 @@ import {
   MapPin,
   CheckCircle,
   FileText,
+  Sparkles,
+  AlertTriangle,
+  Loader2,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  ChevronRight,
+  TrendingUp,
 } from 'lucide-react';
-import { CallLog, CallType } from '../types';
+import { CallLog, CallType, Contact, AICallContextSummary } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
 
 interface CallLogsProps {
   logs: CallLog[];
   lang: Language;
+  contacts?: Contact[];
   onInitiateCall: (phone: string, name?: string) => void;
   onOpenAddContact: (phone: string, name?: string) => void;
   onClearLogs: () => void;
   onReportSpam: (phone: string) => void;
+  onOpenSmsThread?: (phone: string) => void;
 }
 
 export const CallLogs: React.FC<CallLogsProps> = ({
   logs,
   lang,
+  contacts = [],
   onInitiateCall,
   onOpenAddContact,
   onClearLogs,
   onReportSpam,
+  onOpenSmsThread,
 }) => {
   const t = TRANSLATIONS[lang];
+  const isBn = lang === 'bn';
   const [filter, setFilter] = useState<'all' | 'missed' | 'outgoing' | 'incoming' | 'spam'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLog, setSelectedLog] = useState<CallLog | null>(null);
+
+  // AI-driven Call Context Summary state
+  const [aiSummary, setAiSummary] = useState<AICallContextSummary | null>(null);
+  const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleSelectLog = (log: CallLog) => {
+    setSelectedLog(log);
+    setAiSummary(null);
+    setAiError(null);
+    setIsAnalyzingAi(false);
+  };
+
+  const handleAnalyzeWithGemini = async (targetLog: CallLog) => {
+    if (!targetLog) return;
+    setIsAnalyzingAi(true);
+    setAiError(null);
+
+    try {
+      // Find history of this caller across logs
+      const cleanTargetPhone = targetLog.phone.replace(/[^0-9]/g, '');
+      const callerHistory = logs.filter((l) => {
+        const lClean = l.phone.replace(/[^0-9]/g, '');
+        return lClean && lClean === cleanTargetPhone && l.id !== targetLog.id;
+      });
+
+      // Find matching contact info if saved
+      const matchingContact = contacts.find((c) => {
+        const cClean = c.phone.replace(/[^0-9]/g, '');
+        return cClean && cClean === cleanTargetPhone;
+      });
+
+      const response = await fetch('/api/call-logs/gemini-context-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          log: targetLog,
+          callerHistory,
+          contact: matchingContact || null,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to analyze call context');
+      }
+
+      setAiSummary(data.data);
+    } catch (err: any) {
+      console.error('Call context analysis error:', err);
+      setAiError(
+        err.message ||
+          (isBn
+            ? 'কল কনটেক্সট বিশ্লেষণে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।'
+            : 'Failed to analyze call context. Please try again.')
+      );
+    } finally {
+      setIsAnalyzingAi(false);
+    }
+  };
 
   const formatRelativeTime = (timestamp: number) => {
     const diff = Date.now() - timestamp;
@@ -202,7 +277,7 @@ export const CallLogs: React.FC<CallLogsProps> = ({
               key={log.id}
               id={`log-item-${log.id}`}
               className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition group cursor-pointer"
-              onClick={() => setSelectedLog(log)}
+              onClick={() => handleSelectLog(log)}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
@@ -274,22 +349,22 @@ export const CallLogs: React.FC<CallLogsProps> = ({
           onClick={() => setSelectedLog(null)}
         >
           <div
-            className="w-full max-w-sm bg-white dark:bg-neutral-900 rounded-2xl shadow-xl border border-neutral-200 dark:border-neutral-800 p-5 space-y-4"
+            className="w-full max-w-sm sm:max-w-md bg-white dark:bg-neutral-900 rounded-2xl sm:rounded-3xl shadow-xl border border-neutral-200 dark:border-neutral-800 p-4 sm:p-5 space-y-3.5 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
-              <div>
-                <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
+              <div className="min-w-0 pr-2">
+                <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100 truncate">
                   {selectedLog.name}
                 </h3>
-                <p className="text-xs font-mono text-neutral-500">{selectedLog.phone}</p>
+                <p className="text-xs font-mono text-neutral-500 truncate">{selectedLog.phone}</p>
               </div>
-              <div className="w-9 h-9 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
                 {getCallIcon(selectedLog.type, selectedLog.isSpam)}
               </div>
             </div>
 
-            <div className="space-y-2 text-xs text-neutral-600 dark:text-neutral-300">
+            <div className="space-y-1.5 text-xs text-neutral-600 dark:text-neutral-300">
               <div className="flex justify-between py-1 border-b border-neutral-100 dark:border-neutral-800/60">
                 <span className="text-neutral-400">{t.tabRecents}:</span>
                 <span className="font-medium capitalize">{selectedLog.type}</span>
@@ -332,8 +407,184 @@ export const CallLogs: React.FC<CallLogsProps> = ({
               )}
             </div>
 
+            {/* AI-Driven Context Summary Section (Gemini 3.8 Flash) */}
+            <div className="pt-1">
+              {!aiSummary ? (
+                <div className="space-y-2">
+                  <button
+                    id="trigger-ai-call-summary-btn"
+                    type="button"
+                    onClick={() => handleAnalyzeWithGemini(selectedLog)}
+                    disabled={isAnalyzingAi}
+                    className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 active:scale-98 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-75"
+                  >
+                    {isAnalyzingAi ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>{t.aiAnalyzing}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>{t.aiAnalyzeContext}</span>
+                        <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full font-mono">
+                          Gemini 3.8
+                        </span>
+                      </>
+                    )}
+                  </button>
+
+                  {aiError && (
+                    <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between gap-2">
+                      <span className="truncate">{aiError}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAnalyzeWithGemini(selectedLog)}
+                        className="underline text-[11px] font-semibold shrink-0"
+                      >
+                        {isBn ? 'পুনরায় চেষ্টা' : 'Retry'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  id="ai-call-summary-card"
+                  className="p-3.5 rounded-2xl bg-gradient-to-b from-blue-50/90 to-indigo-50/40 dark:from-neutral-800/90 dark:to-neutral-800/50 border border-blue-200/90 dark:border-indigo-900/60 space-y-2.5 text-xs shadow-2xs"
+                >
+                  {/* Header: AI badge, Urgency Pill & Re-analyze */}
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                      <span>{t.aiCallContext}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono">
+                        Gemini 3.8 Flash
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {/* Urgency Pill */}
+                      {aiSummary.urgency === 'urgent' && (
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1 animate-pulse">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>{isBn ? 'জরুরি (Urgent)' : 'Urgent'}</span>
+                        </span>
+                      )}
+                      {aiSummary.urgency === 'high' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3" />
+                          <span>{isBn ? 'উচ্চ গুরুত্ব (High)' : 'High'}</span>
+                        </span>
+                      )}
+                      {aiSummary.urgency === 'medium' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+                          {isBn ? 'মাঝারি (Medium)' : 'Medium'}
+                        </span>
+                      )}
+                      {aiSummary.urgency === 'low' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                          {isBn ? 'স্বাভাবিক (Low)' : 'Low'}
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleAnalyzeWithGemini(selectedLog)}
+                        disabled={isAnalyzingAi}
+                        title={t.aiReanalyze}
+                        className="p-1 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-white/60 dark:hover:bg-neutral-700 transition"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isAnalyzingAi ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Business Intent Badge */}
+                  {aiSummary.businessIntent && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/95 dark:bg-neutral-900/90 border border-neutral-200 dark:border-neutral-700 text-[11px] font-semibold text-neutral-800 dark:text-neutral-200">
+                      <span className="text-neutral-400 font-normal">{t.aiBusinessIntent}:</span>
+                      <span className="text-blue-600 dark:text-blue-400">{aiSummary.businessIntent}</span>
+                    </div>
+                  )}
+
+                  {/* Summary Narrative */}
+                  <p className="text-xs text-neutral-800 dark:text-neutral-200 leading-relaxed font-normal bg-white/80 dark:bg-neutral-900/60 p-2.5 rounded-xl border border-neutral-200/70 dark:border-neutral-700/60">
+                    {aiSummary.summary}
+                  </p>
+
+                  {/* Urgency Reason & Pattern Insight */}
+                  <div className="space-y-1 text-[11px]">
+                    {aiSummary.urgencyReason && (
+                      <div className="flex items-start gap-1.5 text-neutral-700 dark:text-neutral-300">
+                        <span className="font-semibold text-neutral-500 dark:text-neutral-400 shrink-0">
+                          {t.aiUrgency}:
+                        </span>
+                        <span>{aiSummary.urgencyReason}</span>
+                      </div>
+                    )}
+
+                    {aiSummary.callerPatternInsight && (
+                      <div className="flex items-start gap-1.5 text-neutral-700 dark:text-neutral-300">
+                        <span className="font-semibold text-neutral-500 dark:text-neutral-400 shrink-0">
+                          {t.aiPatternInsight}:
+                        </span>
+                        <span>{aiSummary.callerPatternInsight}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recommended Action Callout */}
+                  {aiSummary.recommendedAction && (
+                    <div className="p-2.5 rounded-xl bg-blue-500/10 dark:bg-blue-500/15 border border-blue-500/20 text-blue-900 dark:text-blue-200 flex items-center justify-between gap-2">
+                      <div className="min-w-0 pr-1">
+                        <span className="text-[10px] uppercase tracking-wider font-bold block text-blue-600 dark:text-blue-400">
+                          {t.aiRecommendedAction}
+                        </span>
+                        <span className="text-[11px] font-medium leading-tight line-clamp-2">
+                          {aiSummary.recommendedAction}
+                        </span>
+                      </div>
+                      {onOpenSmsThread && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenSmsThread(selectedLog.phone);
+                            setSelectedLog(null);
+                          }}
+                          className="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-semibold flex items-center gap-1 hover:bg-blue-500 transition shadow-2xs"
+                        >
+                          <Send className="w-3 h-3" />
+                          <span>{isBn ? 'এসএমএস' : 'SMS'}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Key Takeaways */}
+                  {aiSummary.keyPoints && aiSummary.keyPoints.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-neutral-200/50 dark:border-neutral-700/40">
+                      <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+                        {t.aiKeyTakeaways}:
+                      </span>
+                      <ul className="space-y-0.5">
+                        {aiSummary.keyPoints.map((pt, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-start gap-1.5 text-[11px] text-neutral-600 dark:text-neutral-300"
+                          >
+                            <span className="text-blue-500 text-xs shrink-0">•</span>
+                            <span>{pt}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Modal Actions */}
-            <div className="grid grid-cols-2 gap-2 pt-2">
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 id="modal-callback-btn"
                 onClick={() => {
@@ -378,3 +629,4 @@ export const CallLogs: React.FC<CallLogsProps> = ({
     </div>
   );
 };
+

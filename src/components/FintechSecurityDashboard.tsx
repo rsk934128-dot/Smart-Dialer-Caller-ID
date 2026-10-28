@@ -24,7 +24,9 @@ import {
   Terminal,
   Server,
   Zap,
+  Mic,
 } from 'lucide-react';
+import { CallRecordingManager } from './CallRecordingManager';
 import {
   collectDeviceFingerprint,
 } from '../utils/deviceFingerprint';
@@ -97,8 +99,8 @@ export const FintechSecurityDashboard: React.FC<Props> = ({ lang }) => {
     error?: string;
   }>({ loading: false });
 
-  // 8. Active Subtab (Overview, Transaction Simulator, Schema View, Architecture)
-  const [activeSubTab, setActiveSubTab] = useState<'simulator' | 'device' | 'alerts' | 'schema' | 'architecture'>('simulator');
+  // 8. Active Subtab (Overview, Transaction Simulator, Schema View, Architecture, Call Recordings)
+  const [activeSubTab, setActiveSubTab] = useState<'simulator' | 'recordings' | 'device' | 'alerts' | 'schema' | 'architecture'>('simulator');
 
   // 9. 2FA OTP Challenge Modal State
   const [showOtpModal, setShowOtpModal] = useState<boolean>(false);
@@ -365,6 +367,23 @@ export const FintechSecurityDashboard: React.FC<Props> = ({ lang }) => {
 
         <button
           type="button"
+          id="subtab-recordings-btn"
+          onClick={() => setActiveSubTab('recordings')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer shrink-0 ${
+            activeSubTab === 'recordings'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+          }`}
+        >
+          <Mic className="w-4 h-4" />
+          <span>{isBn ? 'কল রেকর্ডিং ম্যানেজার' : 'Call Recording Manager'}</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 font-mono">
+            Room DB
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveSubTab('device')}
           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer shrink-0 ${
             activeSubTab === 'device'
@@ -420,6 +439,11 @@ export const FintechSecurityDashboard: React.FC<Props> = ({ lang }) => {
           <span>{isBn ? 'এ টু জেড আর্কিটেকচার লিংক' : 'A to Z Architecture Link'}</span>
         </button>
       </div>
+
+      {/* SUBTAB: CALL RECORDING MANAGER (ROOM DB & HARDWARE KEYSTORE ENCRYPTION) */}
+      {activeSubTab === 'recordings' && (
+        <CallRecordingManager lang={lang} />
+      )}
 
       {/* SUBTAB 1: TRANSACTION SIMULATOR & SIM SWAP DETECTOR */}
       {activeSubTab === 'simulator' && (
