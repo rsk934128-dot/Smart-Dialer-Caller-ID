@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: 'Release Tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
       release_title:
         description: 'Release Title (e.g. Smart Dialer v1.0.0)'
         required: true
@@ -119,13 +123,30 @@ jobs:
             release-artifacts/*
             dist/
 
+      - name: Compute Release Tag
+        id: release_meta
+        run: |
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            TAG="${{ github.event.inputs.release_tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="v1.0.${{ github.run_number }}"
+          fi
+          echo "tag_name=$TAG" >> $GITHUB_OUTPUT
+          echo "Resolved release tag: $TAG"
+
       - name: Create GitHub Release with Android APK
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.event.inputs.release_title || github.ref_name }}
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ github.event.inputs.release_title || steps.release_meta.outputs.tag_name }}
           body: |
-            # 🚀 Smart Dialer & Fintech Security Android Release
+            ${{ github.event.inputs.release_notes || 'অ্যান্ড্রয়েড কলার আইডি, ইনকামিং স্প্যাম শিল্ড, রুম ডিবি ও এনক্রিপ্টেড কল রেকর্ডিং রিলিজ।' }}
+
+            ## 🚀 Smart Dialer & Fintech Security Android Release (${{ steps.release_meta.outputs.tag_name }})
 
             ### নতুন বৈশিষ্ট্য (New Features):
             - 🔒 **Fintech Call Recording Manager**: Android Room DB এবং KeyStore AES-256-GCM এনক্রিপ্টেড অটো-কল রেকর্ডিং।
@@ -139,7 +160,7 @@ jobs:
             3. অ্যাপটি ওপেন করে ডিফল্ট ডায়ালার ও প্রয়োজনীয় পারমিশন প্রদান করুন।
 
             ---
-            *Released automatically via GitHub Actions CI/CD Pipeline.*
+            *Released automatically via GitHub Actions CI/CD Pipeline (Tag: ${{ steps.release_meta.outputs.tag_name }}).*
           draft: false
           prerelease: false
           files: |
