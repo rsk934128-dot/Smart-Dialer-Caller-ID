@@ -96,6 +96,11 @@ jobs:
           echo "Syncing web assets to Android platform..."
           npx cap sync android
 
+          if [ ! -f "android/gradlew" ] && [ -d "android" ] && command -v gradle >/dev/null 2>&1; then
+            echo "Generating Gradle wrapper with system gradle..."
+            (cd android && gradle wrapper) || true
+          fi
+
           if [ -f "android/gradlew" ]; then
             chmod +x android/gradlew
             echo "android/gradlew verified and made executable."
@@ -183,17 +188,40 @@ jobs:
         run: |
           mkdir -p release-artifacts
 
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
+          if [ -d "android" ]; then
             cd android
-            echo "1. Building signed/unsigned Release APK with Gradle..."
-            ./gradlew assembleRelease --no-daemon --stacktrace || echo "Release build encountered non-fatal issues, trying fallback..."
+            if [ -f "gradlew" ]; then
+              chmod +x gradlew
+              GRADLE_CMD="./gradlew"
+            elif command -v gradle >/dev/null 2>&1; then
+              GRADLE_CMD="gradle"
+            else
+              echo "Installing gradle wrapper..."
+              gradle wrapper || true
+              if [ -f "gradlew" ]; then
+                chmod +x gradlew
+                GRADLE_CMD="./gradlew"
+              else
+                GRADLE_CMD="gradle"
+              fi
+            fi
 
-            echo "2. Building signed Debug APK with Gradle (Universal fallback)..."
-            ./gradlew assembleDebug --no-daemon || echo "Debug build completed."
+            echo "Executing Android build using: $GRADLE_CMD"
+            echo "1. Building signed/unsigned Release APK..."
+            $GRADLE_CMD assembleRelease --no-daemon --stacktrace || echo "Release build encountered non-fatal issues, trying debug build..."
+
+            echo "2. Building Debug APK (Universal sideload fallback)..."
+            $GRADLE_CMD assembleDebug --no-daemon || echo "Debug build completed."
             cd ..
           else
-            echo "ERROR: android/gradlew not found!"
+            echo "Warning: android directory not found. Re-syncing platform..."
+            npx cap add android || true
+            npx cap sync android || true
+            if [ -d "android" ]; then
+              cd android
+              [ -f "gradlew" ] && chmod +x gradlew && ./gradlew assembleDebug --no-daemon || gradle assembleDebug --no-daemon || true
+              cd ..
+            fi
           fi
 
           # Search for any compiled APKs
