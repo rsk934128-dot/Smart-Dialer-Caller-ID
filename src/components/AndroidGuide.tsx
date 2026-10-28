@@ -31,7 +31,7 @@ export const AndroidGuide: React.FC<AndroidGuideProps> = ({ lang, onSimulateInco
   const t = TRANSLATIONS[lang];
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    'permissions_simulator' | 'manifest' | 'runtime_permissions' | 'rolemanager' | 'incallservice' | 'callerid_overlay' | 'callstate_receiver' | 'room_database' | 'architecture' | 'pwabuilder'
+    'permissions_simulator' | 'manifest' | 'runtime_permissions' | 'rolemanager' | 'incallservice' | 'callerid_overlay' | 'callstate_receiver' | 'room_database' | 'architecture' | 'pwabuilder' | 'apk_troubleshoot'
   >('permissions_simulator');
 
   // Simulator state for Android permissions
@@ -997,6 +997,18 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
           <Smartphone className="w-3.5 h-3.5" />
           <span>PWABuilder বাইপাস গাইড</span>
         </button>
+        <button
+          id="tab-apk-troubleshoot"
+          onClick={() => setActiveTab('apk_troubleshoot')}
+          className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition flex items-center gap-1.5 ${
+            activeTab === 'apk_troubleshoot'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+          }`}
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>এপিকে ইনস্টলেশন সমাধান</span>
+        </button>
       </div>
 
       {/* 1. PERMISSIONS & ROLE SIMULATOR TAB */}
@@ -1669,6 +1681,76 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
                 কয়েক সেকেন্ডের মধ্যে ক্লাউড থেকে আপনার <code className="font-mono text-emerald-600 dark:text-emerald-400">.apk</code> ফাইল ডাউনলোড হয়ে যাবে। ফাইলটি যেকোনো অ্যান্ড্রয়েড ফোনে পাঠিয়ে সরাসরি ক্লিক করলেই নেটিভ অ্যাপের মতো ইনস্টল হয়ে যাবে!
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 10. APK INSTALLATION & PLAY PROTECT TROUBLESHOOT TAB */}
+      {activeTab === 'apk_troubleshoot' && (
+        <div className="space-y-4 animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <span>ফোনে APK ইনস্টল না হলে ৪টি দ্রুত সমাধান</span>
+            </div>
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+              যদি আপনার অ্যান্ড্রয়েড ফোনে এপিকে ফাইলটিতে ট্যাপ করার পর <strong>"App not installed"</strong>, <strong>"There was a problem parsing the package"</strong> বা <strong>"Blocked by Play Protect"</strong> দেখায়, তবে নিচের নির্দেশনাগুলো মেনে চলুন:
+            </p>
+          </div>
+
+          {/* Solution 1: Google Play Protect */}
+          <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700/80 space-y-2.5">
+            <div className="flex items-center gap-2 text-neutral-900 dark:text-neutral-100 font-bold text-xs">
+              <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">১</span>
+              <span>Google Play Protect বাইপাস ("Blocked by Play Protect")</span>
+            </div>
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 pl-7 leading-relaxed">
+              যেহেতু এই ডায়ালার অ্যাপটি গুগল প্লে স্টোরের বাইরে সরাসরি APK আকারে তৈরি হয়েছে, তাই গুগল প্লে প্রোটেক্ট সুরক্ষার সতর্কবার্তা দিতে পারে:
+            </p>
+            <div className="ml-7 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs space-y-1.5">
+              <div className="font-semibold text-amber-900 dark:text-amber-200">কীভাবে ইনস্টল করবেন:</div>
+              <ol className="list-decimal pl-4 space-y-1 text-amber-800 dark:text-amber-300 text-[11px]">
+                <li>স্ক্রিনের সতর্কবার্তায় <strong>"More details" (বা "আরও বিশদ")</strong> অপশনে চাপ দিন।</li>
+                <li>নিচে উন্মুক্ত হওয়া <strong>"Install anyway" (বা "যেকোনোভাবে ইনস্টল করুন")</strong> বাটনে চাপ দিন।</li>
+              </ol>
+            </div>
+          </div>
+
+          {/* Solution 2: Uninstall previous version */}
+          <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700/80 space-y-2.5">
+            <div className="flex items-center gap-2 text-neutral-900 dark:text-neutral-100 font-bold text-xs">
+              <span className="w-5 h-5 rounded-full bg-sky-500 text-white flex items-center justify-center text-[10px]">২</span>
+              <span>পূর্বের ভার্সন আনইনস্টল করুন (Package Conflict / "App not installed")</span>
+            </div>
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 pl-7 leading-relaxed">
+              যদি আপনার ফোনে পূর্বে Smart Dialer-এর কোনো টেস্ট বা অন্য কি দিয়ে তৈরি করা ভার্সন থাকে, তবে অ্যান্ড্রয়েড নতুন এপিকে রিজেক্ট করে:
+            </p>
+            <ul className="list-disc pl-11 text-xs text-neutral-600 dark:text-neutral-300 space-y-1">
+              <li>আপনার ফোন থেকে পুরনো Smart Dialer অ্যাপটি আগে <strong>Uninstall</strong> করে নিন।</li>
+              <li>এরপর নতুন ডাউনলোড করা <code className="font-mono text-sky-600 dark:text-sky-400">SmartDialer-v1.0-release-signed.apk</code> ইনস্টল করুন।</li>
+            </ul>
+          </div>
+
+          {/* Solution 3: Unknown Sources */}
+          <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700/80 space-y-2.5">
+            <div className="flex items-center gap-2 text-neutral-900 dark:text-neutral-100 font-bold text-xs">
+              <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px]">৩</span>
+              <span>"Allow from this source" সক্রিয় করুন</span>
+            </div>
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 pl-7 leading-relaxed">
+              ফোন সেটিংস &gt; Apps &gt; Chrome (বা আপনার ফাইল ম্যানেজার) &gt; <strong>Install unknown apps</strong> এ গিয়ে <strong>"Allow from this source"</strong> অন করে দিন।
+            </p>
+          </div>
+
+          {/* Solution 4: Instant PWA Alternative */}
+          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
+            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
+              <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">৪</span>
+              <span>বিকল্প পদ্ধতি: ১-ক্লিকে PWA হিসেবে সরাসরি ফোনে ব্যবহার</span>
+            </div>
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+              এপিকে ফাইলের কোনো ঝামেলা ছাড়াই আপনার ফোনের <strong>Google Chrome</strong> ব্রাউজারে সাইটটি ওপেন করে উপরের <strong>"ফোনে ইনস্টল করুন"</strong> বোতামে চাপলেই এটি তাৎক্ষণিকভাবে আপনার হোমস্ক্রিনে ফুলস্ক্রিন নেটিভ অ্যাপ হয়ে যাবে।
+            </p>
           </div>
         </div>
       )}
