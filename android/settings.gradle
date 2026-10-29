@@ -1,8 +1,14 @@
 include ':app'
 rootProject.name = 'Smart Dialer & Caller ID'
 
+if (file('capacitor-cordova-android-plugins').exists()) {
+    include ':capacitor-cordova-android-plugins'
+    project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins')
+}
+
 try {
     apply from: 'capacitor.settings.gradle'
 } catch (Exception e) {
     // capacitor.settings.gradle will be applied if present
 }
+
