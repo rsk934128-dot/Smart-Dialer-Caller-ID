@@ -1,0 +1,8 @@
+include ':app'
+rootProject.name = 'Smart Dialer & Caller ID'
+
+try {
+    apply from: 'capacitor.settings.gradle'
+} catch (Exception e) {
+    // capacitor.settings.gradle will be applied if present
+}

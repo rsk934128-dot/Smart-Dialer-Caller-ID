@@ -9,7 +9,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "diagnose": "bash diagnose_android.sh",
+    "diagnose:android": "bash scripts/diagnose-android.sh",
+    "diagnose:android:fix": "bash scripts/diagnose-android.sh --fix",
+    "reinit:android": "npm run build && rm -rf android && npx cap add android && npx cap sync android && chmod +x android/gradlew"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
