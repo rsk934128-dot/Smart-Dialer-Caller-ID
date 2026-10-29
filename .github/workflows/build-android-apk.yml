@@ -96,11 +96,11 @@ jobs:
           echo "Syncing web assets to Android platform..."
           npx cap sync android
 
-          # Ensure Gradle wrapper jar is present so gradlew runs Gradle 8.2.1 (compatible with AGP 8.2) instead of system Gradle 9.x
+          # Ensure Gradle wrapper jar is present so gradlew runs Gradle 8.8 (supports Java 21 bytecode version 65)
           mkdir -p android/gradle/wrapper
           if [ ! -f "android/gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "Downloading gradle-wrapper.jar (Gradle 8.2.1)..."
-            curl -fsSL -o android/gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.2.1/gradle/wrapper/gradle-wrapper.jar || true
+            echo "Downloading gradle-wrapper.jar (Gradle 8.8)..."
+            curl -fsSL -o android/gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.8.0/gradle/wrapper/gradle-wrapper.jar || true
           fi
 
           if [ -f "android/gradlew" ]; then

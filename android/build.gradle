@@ -5,8 +5,14 @@ buildscript {
         google()
         mavenCentral()
     }
+    configurations.all {
+        resolutionStrategy {
+            force 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+            force 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+        }
+    }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.1'
+        classpath 'com.android.tools.build:gradle:8.2.2'
         classpath 'com.google.gms:google-services:4.4.0'
     }
 }
@@ -17,6 +23,12 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+    }
+    configurations.all {
+        resolutionStrategy {
+            force 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+            force 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+        }
     }
 }
 
