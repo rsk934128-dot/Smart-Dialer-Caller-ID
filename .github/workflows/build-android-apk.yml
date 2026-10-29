@@ -103,6 +103,16 @@ jobs:
             curl -fsSL -o android/gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.8.0/gradle/wrapper/gradle-wrapper.jar || true
           fi
 
+          # Ensure android/gradle.properties has AndroidX enabled
+          if [ ! -f "android/gradle.properties" ] || ! grep -q "android.useAndroidX=true" "android/gradle.properties"; then
+            echo "Configuring android.useAndroidX=true in android/gradle.properties..."
+            cat << 'EOF' >> android/gradle.properties
+android.useAndroidX=true
+android.enableJetifier=true
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+EOF
+          fi
+
           if [ -f "android/gradlew" ]; then
             chmod +x android/gradlew
             echo "android/gradlew verified and made executable."

@@ -235,6 +235,20 @@ else
     "Gradle cannot identify the ':app' module without settings.gradle."
 fi
 
+# Check android/gradle.properties
+if [ -f "android/gradle.properties" ]; then
+  log_pass "File 'android/gradle.properties' exists."
+  if grep -q "android.useAndroidX=true" "android/gradle.properties"; then
+    log_pass "'android.useAndroidX=true' is enabled in gradle.properties."
+  else
+    log_fail "'android.useAndroidX=true' is MISSING in android/gradle.properties!" \
+      "AndroidX libraries will fail AarMetadata validation. Add 'android.useAndroidX=true'."
+  fi
+else
+  log_fail "'android/gradle.properties' is missing!" \
+    "Create android/gradle.properties with android.useAndroidX=true"
+fi
+
 # ------------------------------------------------------------------------------
 # 4. List File Structure within 'android/'
 # ------------------------------------------------------------------------------
