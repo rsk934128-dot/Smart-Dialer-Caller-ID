@@ -127,62 +127,7 @@ jobs:
           fi
 
           # Ensure android/app/build.gradle has release signingConfig configured
-          if [ -f "android/app/build.gradle" ]; then
-            node -e '
-              const fs = require("fs");
-              let file = fs.readFileSync("android/app/build.gradle", "utf8");
-              let modified = false;
-
-              if (!file.includes("release.keystore")) {
-                console.log("Configuring release keystore in android/app/build.gradle...");
-                if (file.includes("signingConfigs {")) {
-                  file = file.replace("signingConfigs {", `signingConfigs {
-        release {
-            if (file("release.keystore").exists()) {
-                storeFile file("release.keystore")
-                storePassword "smartdialer123"
-                keyAlias "smartdialer"
-                keyPassword "smartdialer123"
-            }
-        }`);
-                  modified = true;
-                } else if (file.includes("defaultConfig {")) {
-                  file = file.replace("defaultConfig {", `signingConfigs {
-        release {
-            if (file("release.keystore").exists()) {
-                storeFile file("release.keystore")
-                storePassword "smartdialer123"
-                keyAlias "smartdialer"
-                keyPassword "smartdialer123"
-            }
-        }
-    }
-    defaultConfig {`);
-                  modified = true;
-                }
-
-                if (file.includes("buildTypes {")) {
-                  file = file.replace(/release\s*\{[^}]*\}/, `release {
-            if (file("release.keystore").exists()) {
-                signingConfig signingConfigs.release
-            } else {
-                signingConfig signingConfigs.debug
-            }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-        }`);
-                  modified = true;
-                }
-
-                if (modified) {
-                  fs.writeFileSync("android/app/build.gradle", file, "utf8");
-                  console.log("Successfully injected release signing config into android/app/build.gradle");
-                }
-              } else {
-                console.log("Signing configuration already verified in build.gradle");
-              }
-            '
-          fi
+          node scripts/configure-signing.js
 
       - name: Build and Sign Android APKs (Release & Debug)
         run: |
