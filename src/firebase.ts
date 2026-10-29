@@ -11,23 +11,44 @@ import {
   User,
 } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
   doc,
-  getDocFromServer,
   setDoc,
   getDoc,
   collection,
   getDocs,
   deleteDoc,
   onSnapshot,
+  persistentLocalCache,
+  persistentMultipleTabManager,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
-// CRITICAL: The app will break without specifying firestoreDatabaseId if provided
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+// Initialize Firestore with auto-detect long polling and multi-tab persistent cache
+// This prevents 10-second backend connection timeouts in preview iframes and mobile webviews
+let dbInstance;
+const databaseId = (firebaseConfig as any).firestoreDatabaseId;
+
+try {
+  dbInstance = initializeFirestore(
+    app,
+    {
+      experimentalAutoDetectLongPolling: true,
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    },
+    databaseId
+  );
+} catch {
+  dbInstance = getFirestore(app, databaseId);
+}
+
+export const db = dbInstance;
 export const auth = getAuth(app);
 
 export const googleProvider = new GoogleAuthProvider();
@@ -38,29 +59,6 @@ googleProvider.addScope('https://www.googleapis.com/auth/contacts.other.readonly
 googleProvider.addScope('https://www.googleapis.com/auth/contacts.readonly');
 googleProvider.addScope('https://www.googleapis.com/auth/user.phonenumbers.read');
 googleProvider.addScope('https://www.googleapis.com/auth/user.emails.read');
-
-// Test connection on boot gracefully with network-awareness
-async function testConnection() {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    return;
-  }
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    // Graceful offline detection - Dexie.js Room DB remains fully functional
-    const msg = error instanceof Error ? error.message.toLowerCase() : '';
-    if (
-      msg.includes('offline') ||
-      msg.includes('unavailable') ||
-      msg.includes('failed to get document')
-    ) {
-      // Benign expected state in offline or sandboxed preview mode
-      return;
-    }
-  }
-}
-// Run non-blocking test connection
-testConnection().catch(() => {});
 
 // Standard Firestore Error Handling conforming to Firebase Skill guidelines
 export enum OperationType {
