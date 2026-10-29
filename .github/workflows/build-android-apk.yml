@@ -106,11 +106,9 @@ jobs:
           # Ensure android/gradle.properties has AndroidX enabled
           if [ ! -f "android/gradle.properties" ] || ! grep -q "android.useAndroidX=true" "android/gradle.properties"; then
             echo "Configuring android.useAndroidX=true in android/gradle.properties..."
-            cat << 'EOF' >> android/gradle.properties
-android.useAndroidX=true
-android.enableJetifier=true
-org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-EOF
+            echo "android.useAndroidX=true" >> android/gradle.properties
+            echo "android.enableJetifier=true" >> android/gradle.properties
+            echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> android/gradle.properties
           fi
 
           if [ -f "android/gradlew" ]; then
