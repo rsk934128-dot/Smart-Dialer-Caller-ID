@@ -76,10 +76,16 @@ if (!fs.existsSync(colorsPath)) {
     <color name="colorPrimaryDark">#0F172A</color>
     <color name="colorAccent">#10B981</color>
     <color name="background">#0F172A</color>
-    <color name="ic_launcher_background">#0F172A</color>
 </resources>
 `;
   fs.writeFileSync(colorsPath, colorsContent, 'utf8');
+} else {
+  // Ensure colors.xml does not duplicate ic_launcher_background (defined in ic_launcher_background.xml)
+  let existingColors = fs.readFileSync(colorsPath, 'utf8');
+  if (existingColors.includes('name="ic_launcher_background"')) {
+    existingColors = existingColors.replace(/<color\s+name="ic_launcher_background">[^<]*<\/color>\s*/g, '');
+    fs.writeFileSync(colorsPath, existingColors, 'utf8');
+  }
 }
 
 // 4. ic_launcher_background.xml
