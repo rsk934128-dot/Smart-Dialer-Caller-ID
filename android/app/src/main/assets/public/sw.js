@@ -81,31 +81,31 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "revision": "1872c500de691dce40960bb85481de07"
   }, {
     "url": "index.html",
-    "revision": "145a053a325f786ab73a847493070ca6"
+    "revision": "ae48d5bef34b362f59f0c86eb4a7efcc"
   }, {
     "url": "assets/index-GQkKQlJd.css",
     "revision": null
   }, {
-    "url": "assets/index-CBNUfrZs.js",
+    "url": "assets/index-C5HMvBqx.js",
     "revision": null
   }, {
     "url": "app-logo.png",
-    "revision": "95c5455db62fa2dfc6a52cea057f7205"
+    "revision": "6dcb49a22dc81881a2d0ae9730a1a895"
   }, {
     "url": "apple-touch-icon.png",
-    "revision": "95c5455db62fa2dfc6a52cea057f7205"
+    "revision": "44c6eb40ec13db6012a7d180048d2e37"
   }, {
     "url": "icon.svg",
     "revision": "5a963f14f4a02b418c0a43a58f70c5aa"
   }, {
     "url": "pwa-192x192.png",
-    "revision": "95c5455db62fa2dfc6a52cea057f7205"
+    "revision": "d1d7df7d2601caaa32c45ce5dadf8847"
   }, {
     "url": "pwa-512x512.png",
-    "revision": "95c5455db62fa2dfc6a52cea057f7205"
+    "revision": "6dcb49a22dc81881a2d0ae9730a1a895"
   }, {
     "url": "pwa-maskable-512x512.png",
-    "revision": "95c5455db62fa2dfc6a52cea057f7205"
+    "revision": "6dcb49a22dc81881a2d0ae9730a1a895"
   }, {
     "url": "manifest.webmanifest",
     "revision": "c3565d87080957321469ca9c33861e64"

@@ -336,12 +336,35 @@ class CallPermissionService {
 
       // Trigger the OS native dialer / phone call via tel:
       try {
-        const telUrl = `tel:${encodeURIComponent(clean)}`;
-        window.location.href = telUrl;
+        const telUrl = `tel:${clean}`;
+        // 1. In Capacitor Android apps, window.open with _system tells WebView to dispatch native Intent
+        if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+          window.open(telUrl, '_system');
+          return true;
+        }
+
+        // 2. Standard DOM invisible anchor click (prevents WebView navigation errors)
+        const a = document.createElement('a');
+        a.href = telUrl;
+        a.target = '_system';
+        a.rel = 'noopener noreferrer';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          if (document.body.contains(a)) document.body.removeChild(a);
+        }, 150);
+
         return true;
       } catch (err) {
         console.error('Error invoking tel: protocol:', err);
-        return false;
+        try {
+          window.location.href = `tel:${clean}`;
+          return true;
+        } catch (fallbackErr) {
+          console.error('Fallback tel: error:', fallbackErr);
+          return false;
+        }
       }
     }
     return false;
