@@ -153,6 +153,12 @@ jobs:
 
           if [ -d "android" ]; then
             cd android
+            # Enforce Gradle 8.9 distribution URL for AGP 8.7+ compatibility
+            if [ -f "gradle/wrapper/gradle-wrapper.properties" ]; then
+              sed -i 's/gradle-[0-9.]*-bin.zip/gradle-8.9-bin.zip/g' gradle/wrapper/gradle-wrapper.properties
+              sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.9-bin.zip/g' gradle/wrapper/gradle-wrapper.properties
+            fi
+
             if [ -f "gradlew" ]; then
               chmod +x gradlew
               GRADLE_CMD="./gradlew"
@@ -160,7 +166,7 @@ jobs:
               GRADLE_CMD="gradle"
             else
               echo "Installing gradle wrapper..."
-              gradle wrapper || true
+              gradle wrapper --gradle-version 8.9 || true
               if [ -f "gradlew" ]; then
                 chmod +x gradlew
                 GRADLE_CMD="./gradlew"
@@ -182,6 +188,10 @@ jobs:
             npx cap sync android || true
             if [ -d "android" ]; then
               cd android
+              if [ -f "gradle/wrapper/gradle-wrapper.properties" ]; then
+                sed -i 's/gradle-[0-9.]*-bin.zip/gradle-8.9-bin.zip/g' gradle/wrapper/gradle-wrapper.properties
+                sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.9-bin.zip/g' gradle/wrapper/gradle-wrapper.properties
+              fi
               [ -f "gradlew" ] && chmod +x gradlew && ./gradlew assembleDebug --no-daemon || gradle assembleDebug --no-daemon || true
               cd ..
             fi
