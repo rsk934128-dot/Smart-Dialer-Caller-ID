@@ -108,10 +108,10 @@ jobs:
           if [ ! -f "android/gradle.properties" ] || ! grep -q "android.useAndroidX=true" "android/gradle.properties"; then
             echo "Configuring android.useAndroidX=true in android/gradle.properties..."
             cat >> android/gradle.properties << 'EOF'
-android.useAndroidX=true
-android.enableJetifier=true
-org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-EOF
+            android.useAndroidX=true
+            android.enableJetifier=true
+            org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
             echo "android/gradle.properties configured successfully."
           fi
 
