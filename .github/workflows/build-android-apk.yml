@@ -95,6 +95,7 @@ jobs:
 
           echo "Syncing web assets to Android platform..."
           npx cap sync android
+          node scripts/ensure-android-resources.js
 
           # Ensure Gradle wrapper is configured for Gradle 8.9 (required by AGP 8.7+)
           mkdir -p android/gradle/wrapper
@@ -146,6 +147,7 @@ jobs:
 
           # Ensure android/app/build.gradle has release signingConfig configured
           node scripts/configure-signing.js
+          node scripts/ensure-android-resources.js
 
       - name: Build and Sign Android APKs (Release & Debug)
         run: |

@@ -249,6 +249,21 @@ else
     "Create android/gradle.properties with android.useAndroidX=true"
 fi
 
+# Check essential XML resources for AAPT
+if [ -f "android/app/src/main/res/values/strings.xml" ] && [ -f "android/app/src/main/res/values/styles.xml" ]; then
+  log_pass "Core Android XML resources (strings.xml, styles.xml, colors.xml) present."
+else
+  log_fail "Missing critical Android XML resources in android/app/src/main/res/values!" \
+    "Run 'node scripts/ensure-android-resources.js' to generate them."
+fi
+
+if [ -f "android/app/src/main/res/xml/file_paths.xml" ]; then
+  log_pass "'android/app/src/main/res/xml/file_paths.xml' exists for FileProvider."
+else
+  log_fail "Missing 'android/app/src/main/res/xml/file_paths.xml'!" \
+    "Required by FileProvider in AndroidManifest.xml."
+fi
+
 # ------------------------------------------------------------------------------
 # 4. List File Structure within 'android/'
 # ------------------------------------------------------------------------------
