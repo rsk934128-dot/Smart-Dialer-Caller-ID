@@ -62,7 +62,7 @@ jobs:
         uses: android-actions/setup-android@v3
         continue-on-error: true
         with:
-          packages: 'platforms;android-34 platforms;android-35 build-tools;34.0.0 platform-tools'
+          packages: 'platforms;android-34 platforms;android-35 build-tools;35.0.0 build-tools;34.0.0 platform-tools'
 
       - name: Accept Android SDK Licenses & Configure Paths
         run: |
@@ -103,12 +103,16 @@ jobs:
             curl -fsSL -o android/gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.8.0/gradle/wrapper/gradle-wrapper.jar || true
           fi
 
-          # Ensure android/gradle.properties has AndroidX enabled
+          # Ensure android/gradle.properties has AndroidX and Jetifier enabled
+          mkdir -p android
           if [ ! -f "android/gradle.properties" ] || ! grep -q "android.useAndroidX=true" "android/gradle.properties"; then
             echo "Configuring android.useAndroidX=true in android/gradle.properties..."
-            echo "android.useAndroidX=true" >> android/gradle.properties
-            echo "android.enableJetifier=true" >> android/gradle.properties
-            echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> android/gradle.properties
+            cat >> android/gradle.properties << 'EOF'
+android.useAndroidX=true
+android.enableJetifier=true
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+EOF
+            echo "android/gradle.properties configured successfully."
           fi
 
           if [ -f "android/gradlew" ]; then

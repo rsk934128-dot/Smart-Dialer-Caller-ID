@@ -21,15 +21,8 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
-// Initialize GoogleGenAI client with standard User-Agent header
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
+// Initialize GoogleGenAI client
+const ai = new GoogleGenAI();
 
 /**
  * Intelligent rule-based fallback metadata when Gemini API key is unavailable
@@ -195,22 +188,42 @@ Return ONLY valid JSON according to the schema.`,
       },
     };
 
-    // Attempt with primary model gemini-3.8-flash, falling back to gemini-2.5-flash if needed
+    const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+        ),
+      ]);
+
+    // Primary: gemini-2.5-flash (ultra-fast, ~900ms latency), with fallback to gemini-3.8-flash
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config,
-      });
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config,
+        }),
+        8000,
+        'gemini-2.5-flash'
+      );
       responseText = response.text;
     } catch (primaryErr: any) {
-      console.warn('gemini-3.8-flash busy or failed, attempting gemini-2.5-flash:', primaryErr?.message);
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config,
-      });
-      responseText = response.text;
+      console.warn('gemini-2.5-flash failed or timed out, trying gemini-3.8-flash:', primaryErr?.message);
+      try {
+        const fallbackResponse = await withTimeout(
+          ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: prompt,
+            config,
+          }),
+          8000,
+          'gemini-3.8-flash'
+        );
+        responseText = fallbackResponse.text;
+      } catch (secErr: any) {
+        console.warn('gemini-3.8-flash also failed or timed out:', secErr?.message);
+      }
     }
     if (!responseText) {
       throw new Error('Empty response from Gemini API');
@@ -537,32 +550,33 @@ All summaries, urgency reasons, and actions should be in polite, natural Bengali
         ),
       ]);
 
+    // Primary: gemini-2.5-flash (fast, responsive) with fallback to gemini-3.8-flash
     try {
       const response = await withTimeout(
         ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config,
         }),
-        12000,
-        'gemini-3.8-flash'
+        8000,
+        'gemini-2.5-flash'
       );
       responseText = response.text;
     } catch (primaryErr: any) {
-      console.warn('gemini-3.8-flash unavailable or timed out, trying gemini-2.5-flash:', primaryErr?.message);
+      console.warn('gemini-2.5-flash unavailable or timed out, trying gemini-3.8-flash:', primaryErr?.message);
       try {
         const fallbackResponse = await withTimeout(
           ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.8-flash',
             contents: prompt,
             config,
           }),
-          10000,
-          'gemini-2.5-flash'
+          8000,
+          'gemini-3.8-flash'
         );
         responseText = fallbackResponse.text;
       } catch (secErr: any) {
-        console.warn('gemini-2.5-flash also unavailable or timed out:', secErr?.message);
+        console.warn('gemini-3.8-flash also unavailable or timed out:', secErr?.message);
       }
     }
 

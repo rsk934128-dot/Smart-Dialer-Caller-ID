@@ -3,6 +3,7 @@
   "appId": "1:33333636662:web:03b129ba63afbb7d9bb297",
   "apiKey": "AIzaSyDi5p6vwauzis_nphW-OlgoIU-_aNQEbJo",
   "authDomain": "gen-lang-client-0789045866.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-smartdialercalle-7acc0dae-61a9-4429-b193-fd792033cd50",
   "storageBucket": "gen-lang-client-0789045866.firebasestorage.app",
   "messagingSenderId": "33333636662",
   "measurementId": "",
