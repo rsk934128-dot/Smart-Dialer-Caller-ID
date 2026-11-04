@@ -9,6 +9,10 @@ buildscript {
         resolutionStrategy {
             force 'org.bouncycastle:bcprov-jdk18on:1.78.1'
             force 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
         }
     }
     dependencies {
@@ -28,6 +32,27 @@ allprojects {
         resolutionStrategy {
             force 'org.bouncycastle:bcprov-jdk18on:1.78.1'
             force 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+        }
+        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == 'org.jetbrains.kotlin') {
+                if (details.requested.name == 'kotlin-stdlib-jdk7' || details.requested.name == 'kotlin-stdlib-jdk8') {
+                    details.useVersion '1.8.22'
+                }
+            }
+        }
+    }
+    dependencies {
+        modules {
+            module("org.jetbrains.kotlin:kotlin-stdlib-jdk7") {
+                replacedBy("org.jetbrains.kotlin:kotlin-stdlib", "kotlin-stdlib-jdk7 has been merged into kotlin-stdlib since 1.8.0")
+            }
+            module("org.jetbrains.kotlin:kotlin-stdlib-jdk8") {
+                replacedBy("org.jetbrains.kotlin:kotlin-stdlib", "kotlin-stdlib-jdk8 has been merged into kotlin-stdlib since 1.8.0")
+            }
         }
     }
 }
