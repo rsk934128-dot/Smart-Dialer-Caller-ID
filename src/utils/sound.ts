@@ -82,6 +82,10 @@ export function playRingbackTone(): () => void {
   const ctx = getAudioContext();
   if (!ctx) return () => {};
 
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+
   let isPlaying = true;
   let pulseTimer: number;
 
@@ -204,8 +208,27 @@ export function playIncomingRingtone(ringtoneId: string = 'chime'): () => void {
   const ctx = getAudioContext();
   if (!ctx) return () => {};
 
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+
   let isPlaying = true;
   let timer: number;
+  let vibrateTimer: number | null = null;
+
+  // Physical device vibration cadence for incoming calls
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate([400, 250, 400, 250, 600]);
+      vibrateTimer = window.setInterval(() => {
+        if (isPlaying) {
+          navigator.vibrate([400, 250, 400, 250, 600]);
+        }
+      }, 2600);
+    } catch {
+      // Ignore vibration error
+    }
+  }
 
   const playChime = () => {
     if (!isPlaying) return;
@@ -403,6 +426,15 @@ export function playIncomingRingtone(ringtoneId: string = 'chime'): () => void {
   return () => {
     isPlaying = false;
     clearTimeout(timer);
+    if (vibrateTimer) {
+      clearInterval(vibrateTimer);
+      vibrateTimer = null;
+    }
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(0);
+      } catch {}
+    }
   };
 }
 
@@ -424,5 +456,30 @@ export function playCallEndedTone() {
     osc.stop(ctx.currentTime + 0.5);
   } catch {
     // Ignore
+  }
+}
+
+/**
+ * Battery & Audio Safeguard: Instantly stops all sound timers, oscillators, and vibration
+ */
+export function stopAllCallSounds(): void {
+  if (ringtoneInterval) {
+    clearInterval(ringtoneInterval);
+    ringtoneInterval = null;
+  }
+  if (activeToneOscillators) {
+    try {
+      activeToneOscillators.osc1.stop();
+      activeToneOscillators.osc2.stop();
+      activeToneOscillators.osc1.disconnect();
+      activeToneOscillators.osc2.disconnect();
+      activeToneOscillators.gain.disconnect();
+    } catch {}
+    activeToneOscillators = null;
+  }
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate(0);
+    } catch {}
   }
 }

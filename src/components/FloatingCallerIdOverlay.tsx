@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Move,
   Music,
+  Navigation,
 } from 'lucide-react';
 import { ActiveCall } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
@@ -26,6 +27,7 @@ interface FloatingCallerIdOverlayProps {
   onToggleSilence: () => void;
   onExpandFullscreen: () => void;
   onBlockNumber: (phone: string) => void;
+  onOpenDualMap?: () => void;
   isSilenced: boolean;
 }
 
@@ -37,6 +39,7 @@ export const FloatingCallerIdOverlay: React.FC<FloatingCallerIdOverlayProps> = (
   onToggleSilence,
   onExpandFullscreen,
   onBlockNumber,
+  onOpenDualMap,
   isSilenced,
 }) => {
   const t = TRANSLATIONS[lang];
@@ -86,6 +89,16 @@ export const FloatingCallerIdOverlay: React.FC<FloatingCallerIdOverlayProps> = (
           </div>
 
           <div className="flex items-center gap-1">
+            {onOpenDualMap && (
+              <button
+                id="btn-overlay-dual-map"
+                onClick={onOpenDualMap}
+                title="ডুয়াল স্যাটেলাইট ম্যাপ দেখুন"
+                className="p-1 rounded-lg hover:bg-white/10 text-sky-400 hover:text-white transition"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               id="btn-overlay-expand-fullscreen"
               onClick={onExpandFullscreen}

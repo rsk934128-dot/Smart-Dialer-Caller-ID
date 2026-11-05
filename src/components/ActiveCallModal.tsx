@@ -22,11 +22,18 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Sparkles,
+  Navigation,
+  Compass,
 } from 'lucide-react';
 import { ActiveCall, Contact } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
 import { playDtmfTone } from '../utils/sound';
 import { roomDbService } from '../db/roomDatabaseService';
+import {
+  crystalAudioRecordingService,
+  LiveAudioFrame,
+} from '../services/crystalAudioRecordingService';
 
 interface ActiveCallModalProps {
   call: ActiveCall;
@@ -39,6 +46,7 @@ interface ActiveCallModalProps {
   onToggleHold: () => void;
   onToggleRecord: () => void;
   onUpdateNote?: (note: string) => void;
+  onOpenDualMap?: () => void;
   soundEnabled: boolean;
 }
 
@@ -53,6 +61,7 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
   onToggleHold,
   onToggleRecord,
   onUpdateNote,
+  onOpenDualMap,
   soundEnabled,
 }) => {
   const t = TRANSLATIONS[lang];
@@ -60,6 +69,7 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
   const [showInCallKeypad, setShowInCallKeypad] = useState(false);
   const [typedDigits, setTypedDigits] = useState('');
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioFrame, setAudioFrame] = useState<LiveAudioFrame | null>(null);
 
   // Quick In-Call Notes State
   const [isNotesOpen, setIsNotesOpen] = useState(false);
@@ -106,18 +116,32 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
     }, 2200);
   };
 
-  // Independent recording timer: counts elapsed recording duration while recording is active
+  // Real-time Crystal Audio Recording and Waveform Mapping Engine
   useEffect(() => {
-    let interval: number | undefined;
+    let isCancelled = false;
+
     if (call.isRecording && call.state === 'connected') {
-      interval = window.setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
-      }, 1000);
-    } else if (!call.isRecording) {
+      crystalAudioRecordingService
+        .startRecording(call, (frame) => {
+          if (!isCancelled) {
+            setAudioFrame(frame);
+            setRecordingSeconds(frame.durationSeconds);
+          }
+        })
+        .catch(console.error);
+    } else {
+      setAudioFrame(null);
       setRecordingSeconds(0);
+      if (crystalAudioRecordingService.isRecordingActive()) {
+        crystalAudioRecordingService.stopRecording().catch(console.error);
+      }
     }
+
     return () => {
-      if (interval) clearInterval(interval);
+      isCancelled = true;
+      if (crystalAudioRecordingService.isRecordingActive()) {
+        crystalAudioRecordingService.stopRecording().catch(console.error);
+      }
     };
   }, [call.isRecording, call.state]);
 
@@ -156,43 +180,72 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
       >
         {/* Top bar with Caller ID status badges & Recording banner */}
         <div className="flex flex-col items-center gap-2 pt-2 text-center w-full">
-          {/* Prominent Recording Status Banner with Timer & Pulse Waveform */}
+          {/* Prominent Recording Status Banner with Live Waveform Mapping & Sparkle Glow */}
           {call.isRecording && call.state === 'connected' && (
             <div
               id="active-call-recording-banner"
-              className="w-full flex items-center justify-between px-3 py-1.5 rounded-2xl bg-gradient-to-r from-red-950 via-rose-900/90 to-red-950 border border-red-500/80 shadow-[0_0_20px_rgba(239,68,68,0.5)] ring-1 ring-red-400/40 animate-fadeIn"
+              className="w-full flex flex-col gap-2 p-2.5 rounded-2xl bg-gradient-to-r from-red-950 via-rose-950 to-neutral-950 border-2 border-red-500/80 shadow-[0_0_30px_rgba(239,68,68,0.45)] ring-1 ring-red-400/40 animate-fadeIn"
             >
-              {/* Left: Prominent Pulsing Red Beacon */}
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3.5 w-3.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-80" />
-                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-600 border border-white ring-2 ring-red-400/80 shadow-[0_0_8px_rgba(239,68,68,1)]" />
-                </span>
+              {/* Top Row: REC beacon, Sparkle, Size, and Timer */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-3.5 w-3.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-80" />
+                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-600 border border-white ring-2 ring-red-400/80 shadow-[0_0_8px_rgba(239,68,68,1)]" />
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-black text-white tracking-widest bg-red-600 px-1.5 py-0.2 rounded text-[10px]">
+                      REC
+                    </span>
+                    <span className="text-[11px] font-bold text-red-100">
+                      {isBn ? 'ঝকঝকা চকচকা এইচডি রেকর্ড' : 'Crystal HD Record'}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-1.5">
-                  <span className="font-mono font-black text-white tracking-widest bg-red-600 px-1.5 py-0.2 rounded text-[10px]">
-                    REC
+                  {/* Peak Voice Sparkle Detector */}
+                  {audioFrame?.sparkle && (
+                    <span className="flex items-center gap-1 text-[9px] text-amber-300 font-bold bg-amber-950/80 border border-amber-500/60 px-1.5 py-0.2 rounded-md animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.5)]">
+                      <Sparkles className="w-2.5 h-2.5 text-amber-400 fill-amber-400 animate-spin" />
+                      <span>{isBn ? 'ভয়েস পিক' : 'Peak'}</span>
+                    </span>
+                  )}
+
+                  {/* Real-time File Size & 48kHz HD Badge */}
+                  <span className="text-[9px] font-mono text-neutral-300 px-1.5 py-0.2 rounded bg-black/60 border border-neutral-700/60 hidden sm:inline">
+                    {audioFrame ? `${audioFrame.sizeKb} KB` : '16 KB'} • 48kHz
                   </span>
-                  <span className="text-[11px] font-semibold text-red-100 hidden sm:inline">
-                    {t.recordingActive || 'কল রেকর্ড হচ্ছে'}
-                  </span>
+
+                  {/* Visual Recording Timer Badge */}
+                  <div
+                    id="recording-timer-pill"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-black/80 border border-red-400/70 font-mono font-bold text-xs text-red-200 tracking-wider shadow-inner"
+                  >
+                    <CircleDot className="w-3 h-3 text-red-400 animate-pulse shrink-0" />
+                    <span>{formatDuration(recordingSeconds)}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Center: Audio Frequency Waveform Bars */}
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-black/50 border border-red-500/30">
-                <span className="w-1 h-3 bg-red-400 rounded-full animate-pulse" />
-                <span className="w-1 h-5 bg-red-500 rounded-full animate-pulse delay-75" />
-                <span className="w-1 h-2 bg-red-300 rounded-full animate-pulse delay-150" />
-                <span className="w-1 h-4 bg-red-500 rounded-full animate-pulse delay-100" />
-              </div>
-
-              {/* Right: Visual Recording Timer Badge */}
-              <div
-                id="recording-timer-pill"
-                className="flex items-center gap-1 px-2 py-0.5 rounded-xl bg-black/70 border border-red-400/60 font-mono font-bold text-xs text-red-200 tracking-wider shadow-inner"
-              >
-                <CircleDot className="w-3.5 h-3.5 text-red-400 animate-pulse shrink-0" />
-                <span>{formatDuration(recordingSeconds)}</span>
+              {/* Bottom Row: 16-Bar Real-Time Frequency Waveform Mapping */}
+              <div className="w-full flex items-center justify-between gap-1 px-2 py-1.5 rounded-xl bg-black/70 border border-red-900/60 shadow-inner">
+                {Array.from({ length: 16 }).map((_, idx) => {
+                  const rawVal = audioFrame?.waveform[idx] ?? Math.floor(Math.sin((idx + recordingSeconds) * 0.8) * 30 + 40);
+                  const normalizedHeight = Math.max(4, Math.min(22, Math.round((rawVal / 255) * 22)));
+                  const isPeak = rawVal > 150;
+                  return (
+                    <span
+                      key={idx}
+                      className={`flex-1 rounded-full transition-all duration-75 ${
+                        isPeak
+                          ? 'bg-gradient-to-t from-red-600 via-amber-400 to-white shadow-[0_0_6px_rgba(251,191,36,0.8)]'
+                          : 'bg-gradient-to-t from-rose-700 to-emerald-400'
+                      }`}
+                      style={{ height: `${normalizedHeight}px` }}
+                    />
+                  );
+                })}
               </div>
             </div>
           )}
@@ -295,6 +348,20 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
               <MapPin className="w-3 h-3 text-neutral-500" />
               <span>{call.callerIdInfo.city}, {call.callerIdInfo.country || 'Bangladesh'}</span>
             </p>
+          )}
+
+          {/* Dual Location Map Trigger Button */}
+          {onOpenDualMap && (
+            <button
+              id="active-call-open-dual-map-btn"
+              type="button"
+              onClick={onOpenDualMap}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-500/50 text-sky-300 text-xs mt-2 hover:bg-sky-900 transition active:scale-95 shadow-xs cursor-pointer group"
+              title="ডুয়াল লোকেশন স্যাটেলাইট রেডার ম্যাপ দেখুন"
+            >
+              <Navigation className="w-3.5 h-3.5 text-sky-400 group-hover:rotate-45 transition-transform" />
+              <span className="font-semibold">{isBn ? 'ডুয়াল স্যাটেলাইট ম্যাপ দেখুন' : 'View Dual Location Map'}</span>
+            </button>
           )}
 
           {call.callerIdInfo?.notes && !isNotesOpen && (

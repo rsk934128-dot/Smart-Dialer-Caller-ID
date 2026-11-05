@@ -2,6 +2,8 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   signInWithEmailAndPassword,
@@ -128,8 +130,45 @@ export function isUserAuthCancellation(err: unknown): boolean {
   );
 }
 
+// Handle potential redirect result when app boots or reloads on Android / Mobile WebViews
+if (typeof window !== 'undefined') {
+  getRedirectResult(auth)
+    .then(async (result) => {
+      if (result && result.user) {
+        console.info('Redirect sign-in completed successfully for:', result.user.email);
+        try {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken && (window as any).__setGoogleAccessToken) {
+            (window as any).__setGoogleAccessToken(credential.accessToken);
+          }
+        } catch {
+          // ignore
+        }
+        await syncUserProfile(result.user).catch((err) =>
+          console.warn('Redirect user profile sync warning:', err)
+        );
+      }
+    })
+    .catch((err) => {
+      if (!isUserAuthCancellation(err)) {
+        console.warn('Redirect sign-in handler notice:', err);
+      }
+    });
+}
+
 // Authentication Helpers
-export async function loginWithGoogle(): Promise<User> {
+export async function loginWithGoogle(forceRedirect = false): Promise<User | null> {
+  googleProvider.setCustomParameters({ prompt: 'select_account' });
+  const isCapacitorNative =
+    typeof window !== 'undefined' &&
+    Boolean((window as any).Capacitor?.isNativePlatform?.());
+
+  // If explicitly requested, initiate redirect directly
+  if (forceRedirect) {
+    await signInWithRedirect(auth, googleProvider);
+    return null;
+  }
+
   try {
     const result = await signInWithPopup(auth, googleProvider);
     // Cache OAuth access token strictly in-memory for Google People API
@@ -151,6 +190,22 @@ export async function loginWithGoogle(): Promise<User> {
     }
     return result.user;
   } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const code = typeof err === 'object' && err !== null && 'code' in err ? (err as any).code : '';
+
+    // If popup was blocked or unsupported in Android WebView, gracefully fall back to signInWithRedirect
+    if (
+      isCapacitorNative ||
+      code === 'auth/popup-blocked' ||
+      code === 'auth/operation-not-supported-in-this-environment' ||
+      msg.includes('popup-blocked') ||
+      msg.includes('operation-not-supported')
+    ) {
+      console.info('Switching to signInWithRedirect for Google account selection on Android...');
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
+
     if (isUserAuthCancellation(err)) {
       console.info('Google Sign-In popup closed or cancelled by user.');
     } else {

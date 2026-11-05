@@ -64,16 +64,26 @@ export const Keypad: React.FC<KeypadProps> = ({
 }) => {
   const t = TRANSLATIONS[lang];
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [selectedSim, setSelectedSim] = useState<1 | 2>(1);
+  const [selectedSim, setSelectedSim] = useState<1 | 2>(() => {
+    const pref = callPermissionService.getDefaultSimSlot();
+    return pref === 2 ? 2 : 1;
+  });
+  const [simLabels, setSimLabels] = useState(() => callPermissionService.getSimOperatorLabels());
   const [callMode, setCallMode] = useState<CallMode>(() => callPermissionService.getCallMode());
   const backspaceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const unsub = callPermissionService.subscribe((_perms, _isDef, mode) => {
       setCallMode(mode);
+      setSimLabels(callPermissionService.getSimOperatorLabels());
     });
     return () => unsub();
   }, []);
+
+  const handleSelectSim = (sim: 1 | 2) => {
+    setSelectedSim(sim);
+    callPermissionService.setDefaultSimSlot(sim);
+  };
 
   const handleModeChange = (mode: CallMode) => {
     setCallMode(mode);
@@ -131,25 +141,25 @@ export const Keypad: React.FC<KeypadProps> = ({
         <div className="flex items-center gap-1.5">
           <button
             id="sim-1-selector"
-            onClick={() => setSelectedSim(1)}
+            onClick={() => handleSelectSim(1)}
             className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
               selectedSim === 1
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
             }`}
           >
-            {t.simSlot} 1 (GP)
+            {t.simSlot} 1 ({simLabels.sim1})
           </button>
           <button
             id="sim-2-selector"
-            onClick={() => setSelectedSim(2)}
+            onClick={() => handleSelectSim(2)}
             className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
               selectedSim === 2
-                ? 'bg-emerald-600 text-white shadow-xs'
+                ? 'bg-sky-600 text-white shadow-xs'
                 : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
             }`}
           >
-            {t.simSlot} 2 (Robi)
+            {t.simSlot} 2 ({simLabels.sim2})
           </button>
         </div>
 
@@ -436,28 +446,52 @@ export const Keypad: React.FC<KeypadProps> = ({
       </div>
 
       {/* Action Call Buttons Area */}
-      <div className="py-2 px-6 shrink-0 space-y-2">
+      <div className="py-2 px-4 sm:px-6 shrink-0 space-y-2">
         {phoneNumber ? (
           <div className="flex gap-2">
-            {/* Primary Call Button (based on selected mode) */}
+            {/* SIM 1 Call Button */}
             <button
-              id="dialpad-call-btn"
-              onClick={() => onInitiateCall(phoneNumber, undefined, callMode)}
-              className="flex-1 py-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-base transition-all shadow-md bg-emerald-600 hover:bg-emerald-500 text-white active:scale-98 shadow-emerald-900/20"
+              id="dialpad-sim1-call-btn"
+              onClick={() => {
+                handleSelectSim(1);
+                onInitiateCall(phoneNumber, undefined, callMode);
+              }}
+              className={`flex-1 py-2.5 sm:py-3 px-2 sm:px-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm transition-all shadow-md active:scale-98 ${
+                selectedSim === 1
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30 ring-2 ring-emerald-400/50'
+                  : 'bg-emerald-700/80 hover:bg-emerald-600 text-white shadow-emerald-950/20'
+              }`}
+              title={isBn ? `SIM 1 (${simLabels.sim1}) দিয়ে সরাসরি কল করুন` : `Call via SIM 1 (${simLabels.sim1})`}
             >
-              <Phone className="w-5 h-5 fill-current" />
-              <span>
-                {callMode === 'real'
-                  ? isBn
-                    ? 'রিয়েল সিম কল করুন'
-                    : 'Real SIM Call'
-                  : isBn
-                  ? 'ইন-অ্যাপ ডায়াল করুন'
-                  : 'In-App Call Screen'}
-              </span>
+              <Phone className="w-4 h-4 fill-current shrink-0" />
+              <div className="flex flex-col items-start text-left leading-tight">
+                <span className="font-bold">SIM 1</span>
+                <span className="text-[9px] sm:text-[10px] opacity-90 truncate max-w-[70px]">{simLabels.sim1}</span>
+              </div>
             </button>
 
-            {/* Alternate Quick Action Button */}
+            {/* SIM 2 Call Button */}
+            <button
+              id="dialpad-sim2-call-btn"
+              onClick={() => {
+                handleSelectSim(2);
+                onInitiateCall(phoneNumber, undefined, callMode);
+              }}
+              className={`flex-1 py-2.5 sm:py-3 px-2 sm:px-3 rounded-2xl flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm transition-all shadow-md active:scale-98 ${
+                selectedSim === 2
+                  ? 'bg-sky-600 hover:bg-sky-500 text-white shadow-sky-900/30 ring-2 ring-sky-400/50'
+                  : 'bg-sky-700/80 hover:bg-sky-600 text-white shadow-sky-950/20'
+              }`}
+              title={isBn ? `SIM 2 (${simLabels.sim2}) দিয়ে সরাসরি কল করুন` : `Call via SIM 2 (${simLabels.sim2})`}
+            >
+              <Phone className="w-4 h-4 fill-current shrink-0" />
+              <div className="flex flex-col items-start text-left leading-tight">
+                <span className="font-bold">SIM 2</span>
+                <span className="text-[9px] sm:text-[10px] opacity-90 truncate max-w-[70px]">{simLabels.sim2}</span>
+              </div>
+            </button>
+
+            {/* In-App / Real Call Quick Switch Action */}
             <button
               id="dialpad-alt-call-btn"
               onClick={() =>
@@ -470,18 +504,24 @@ export const Keypad: React.FC<KeypadProps> = ({
               title={
                 callMode === 'real'
                   ? isBn
-                    ? 'ইন-অ্যাপ স্ক্রিনে টেস্ট করুন'
+                    ? 'ইন-অ্যাপ স্ক্রিনে টেস্ট করুন (রেকর্ডিং ও টাইমার সহ)'
                     : 'Test in In-App Screen'
                   : isBn
                   ? 'সরাসরি মোবাইলের সিম দিয়ে রিয়েল কল করুন'
                   : 'Make Real SIM Call'
               }
-              className="px-3.5 py-3 rounded-2xl flex items-center justify-center border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-semibold active:scale-95 transition"
+              className="px-2.5 sm:px-3 py-2 rounded-2xl flex flex-col items-center justify-center border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 text-[10px] font-semibold active:scale-95 transition shrink-0"
             >
               {callMode === 'real' ? (
-                <Radio className="w-4 h-4 text-cyan-600" />
+                <>
+                  <Radio className="w-4 h-4 text-cyan-500 mb-0.5" />
+                  <span className="text-[9px]">{isBn ? 'ইন-অ্যাপ' : 'In-App'}</span>
+                </>
               ) : (
-                <Smartphone className="w-4 h-4 text-emerald-600" />
+                <>
+                  <Smartphone className="w-4 h-4 text-emerald-500 mb-0.5" />
+                  <span className="text-[9px]">{isBn ? 'সিম কল' : 'SIM'}</span>
+                </>
               )}
             </button>
           </div>

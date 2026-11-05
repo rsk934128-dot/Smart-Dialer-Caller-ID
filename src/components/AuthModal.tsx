@@ -51,20 +51,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const isBn = lang === 'bn';
   const user = syncStatus.user;
 
-  const handleGoogleAuth = async () => {
+  const handleGoogleAuth = async (forceRedirect = false) => {
     setIsLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
-      await loginWithGoogle();
-      setSuccessMessage(
-        isBn
-          ? 'গুগল দিয়ে সফলভাবে লগইন হয়েছে! আপনার ডাটা ক্লাউডে সুরক্ষিত থাকবে।'
-          : 'Signed in with Google successfully! Data is now synced with Cloud.'
-      );
-      setTimeout(() => {
-        onClose();
-      }, 1200);
+      const res = await loginWithGoogle(forceRedirect);
+      if (res) {
+        setSuccessMessage(
+          isBn
+            ? 'গুগল দিয়ে সফলভাবে লগইন হয়েছে! আপনার ডাটা ক্লাউডে সুরক্ষিত থাকবে।'
+            : 'Signed in with Google successfully! Data is now synced with Cloud.'
+        );
+        setTimeout(() => {
+          onClose();
+        }, 1200);
+      } else {
+        setSuccessMessage(
+          isBn
+            ? 'গুগল একাউন্ট নির্বাচন উইন্ডো লোড হচ্ছে...'
+            : 'Redirecting to Google Account selector...'
+        );
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       const code = typeof err === 'object' && err !== null && 'code' in err ? (err as any).code : '';
@@ -78,8 +86,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       ) {
         setErrorMessage(
           isBn
-            ? 'লগইন পপআপ বন্ধ করা হয়েছে বা পপআপ ব্লক রয়েছে। পপআপ অনুমোদিত কিনা দেখে পুনরায় চেষ্টা করুন।'
-            : 'Sign-in popup was closed or blocked. Please ensure popups are allowed and try again.'
+            ? 'লগইন পপআপ বন্ধ করা হয়েছে বা পপআপ ব্লক রয়েছে। নিচের "রিডাইরেক্ট দিয়ে গুগল লগইন" বাটনে ক্লিক করে যেকোনো একাউন্ট বেছে নিন।'
+            : 'Sign-in popup was closed or blocked. Try the "Sign in via Browser Redirect" button below.'
         );
       } else {
         setErrorMessage(
@@ -188,18 +196,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       <div className="w-full max-w-sm bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-4 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-500 text-white flex items-center justify-center shadow-xs">
-              <Cloud className="w-4 h-4" />
-            </div>
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/app-logo.png"
+              alt="Smart Dialer APK Logo"
+              className="w-9 h-9 rounded-xl shadow-md border border-emerald-500/40 object-cover"
+            />
             <div>
-              <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
-                {user
+              <h3 className="text-sm font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                <span>{user
                   ? (isBn ? 'ক্লাউড ব্যাকআপ ও প্রোফাইল' : 'Cloud Backup & Profile')
-                  : (isBn ? 'ইউজার অ্যাকাউন্ট ও ক্লাউড ব্যাকআপ' : 'User Account & Cloud Backup')}
+                  : (isBn ? 'গুগল অ্যাকাউন্ট ও ক্লাউড সিঙ্ক' : 'Google Account & Cloud Sync')}</span>
               </h3>
               <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                {isBn ? 'Firebase Authentication & Firestore' : 'Firebase Cloud Sync'}
+                {isBn ? 'স্মার্ট ডায়ালার এপিকে ও ফায়ারবেস অথেন্টিকেশন' : 'Smart Dialer APK & Firebase Auth'}
               </p>
             </div>
           </div>
@@ -338,6 +348,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 )}
 
                 <button
+                  type="button"
+                  onClick={() => handleGoogleAuth(false)}
+                  disabled={isLoading}
+                  className="w-full py-2.5 px-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-semibold flex items-center justify-center gap-2 transition"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                  <span>{isBn ? 'অন্য গুগল অ্যাকাউন্টে পরিবর্তন করুন' : 'Switch Google Account'}</span>
+                </button>
+
+                <button
                   id="sign-out-btn"
                   onClick={handleLogout}
                   disabled={isLoading}
@@ -355,13 +380,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div>
                 <button
                   id="google-signin-btn"
-                  onClick={handleGoogleAuth}
+                  onClick={() => handleGoogleAuth(false)}
                   disabled={isLoading}
                   type="button"
-                  className="w-full py-3 px-4 rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white hover:bg-neutral-50 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-100 text-xs font-bold flex items-center justify-center gap-2.5 transition shadow-xs"
+                  className="w-full py-3.5 px-4 rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 via-cyan-500/10 to-blue-500/10 hover:from-emerald-500/20 hover:to-blue-500/20 dark:from-emerald-950/40 dark:to-blue-950/40 text-neutral-900 dark:text-neutral-100 text-xs font-bold flex items-center justify-center gap-2.5 transition shadow-sm active:scale-98"
                 >
                   {/* Google G Logo */}
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                     <path
                       fill="#4285F4"
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -382,15 +407,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <span>
                     {isLoading
                       ? (isBn ? 'প্রসেসিং হচ্ছে...' : 'Signing in...')
-                      : (isBn ? 'গুগল দিয়ে ১-ক্লিক লগইন / রেজিস্ট্রেশন' : 'Sign In with Google')}
+                      : (isBn ? 'যেকোনো গুগল একাউন্ট দিয়ে লগইন করুন' : 'Sign In with Any Google Account')}
                   </span>
                 </button>
 
-                <p className="text-[10px] text-center text-neutral-400 mt-1.5">
-                  {isBn
-                    ? 'গুগল দিয়ে সাইন ইন করলে সরাসরি কন্টাক্টস ও ডায়ালার ডাটা ক্লাউডে সেভ হবে।'
-                    : 'Instant sync for contacts, logs, and blocked numbers.'}
+                <p className="text-[10px] text-center text-neutral-400 mt-1.5 flex items-center justify-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                  <span>
+                    {isBn
+                      ? 'ডিভাইসে থাকা যেকোনো জিমেইল একাউন্ট বাছাই করে ক্লাউড সিঙ্ক করুন'
+                      : 'Choose any Gmail account on device for 1-click cloud sync'}
+                  </span>
                 </p>
+
+                {/* Alternative Redirect Button for Android APK WebView */}
+                <button
+                  type="button"
+                  onClick={() => handleGoogleAuth(true)}
+                  disabled={isLoading}
+                  className="w-full mt-2 py-1 px-2 text-[10px] text-neutral-500 hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center justify-center gap-1 transition"
+                >
+                  <span>{isBn ? 'পপআপে আটকে গেলে: ব্রাউজার রিডাইরেক্ট দিয়ে লগইন' : 'Alternative: Sign in via Browser Redirect'}</span>
+                </button>
               </div>
 
               {/* Divider */}

@@ -29,8 +29,10 @@ import {
   playRingbackTone,
   playIncomingRingtone,
   playCallEndedTone,
+  stopAllCallSounds,
 } from './utils/sound';
 import { roomDbService } from './db/roomDatabaseService';
+import { crystalAudioRecordingService } from './services/crystalAudioRecordingService';
 
 import { Header } from './components/Header';
 import { SidebarDrawer } from './components/SidebarDrawer';
@@ -332,6 +334,7 @@ export default function App() {
         audioStopFnRef.current();
         audioStopFnRef.current = null;
       }
+      stopAllCallSounds();
       if (connectTimeoutRef.current) {
         clearTimeout(connectTimeoutRef.current);
       }
@@ -476,6 +479,30 @@ export default function App() {
     setActiveCall(newCall);
     setIsSilenced(shouldSilence);
 
+    // Request permission & show system notification
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+      if (Notification.permission === 'granted') {
+        try {
+          const notif = new Notification(`📞 ইনকামিং কল: ${caller.name || caller.phone}`, {
+            body: `${caller.phone} • ${caller.businessCategory || 'ইনকামিং সেলুলার কল'}\nরিসিভ করতে বা বিস্তারিত দেখতে ট্যাপ করুন`,
+            icon: '/app-logo.png',
+            badge: '/app-logo.png',
+            tag: 'incoming-call',
+            requireInteraction: true,
+          });
+          notif.onclick = () => {
+            window.focus();
+            notif.close();
+          };
+        } catch (e) {
+          console.warn('Notification display failed:', e);
+        }
+      }
+    }
+
     // Only ring if not silenced by spam protection or blocklist
     if (soundEnabled && !shouldSilence) {
       audioStopFnRef.current = playIncomingRingtone(contactRingtoneId);
@@ -514,6 +541,7 @@ export default function App() {
       return {
         ...prev,
         state: 'connected',
+        uiMode: 'fullscreen',
         startTime: Date.now(),
       };
     });
@@ -529,6 +557,11 @@ export default function App() {
     if (audioStopFnRef.current) {
       audioStopFnRef.current();
       audioStopFnRef.current = null;
+    }
+    stopAllCallSounds();
+
+    if (crystalAudioRecordingService.isRecordingActive()) {
+      crystalAudioRecordingService.stopRecording().catch(console.error);
     }
 
     if (soundEnabled) {

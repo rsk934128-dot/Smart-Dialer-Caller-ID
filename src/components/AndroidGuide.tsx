@@ -880,6 +880,49 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
 
   return (
     <div id="android-guide-component" className="flex flex-col h-full overflow-y-auto p-4 space-y-4">
+      {/* Official APK Identity & Logo Showcase Banner */}
+      <div className="relative overflow-hidden p-4 rounded-3xl bg-gradient-to-r from-emerald-950/70 via-neutral-900 to-cyan-950/70 border border-emerald-500/30 shadow-xl">
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="relative group shrink-0">
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-60 blur-xs group-hover:opacity-100 transition duration-300" />
+              <img
+                src="/app-logo.png"
+                alt="Smart Dialer Official APK Logo"
+                className="relative w-14 h-14 rounded-2xl object-cover shadow-lg border-2 border-emerald-400/80 bg-neutral-950"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                  অফিশিয়াল এপিকে লোগো (Cyber Shield)
+                </span>
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
+                  v1.0.0 Release
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight mt-0.5 truncate">
+                Smart Dialer & Fintech Security APK
+              </h2>
+              <p className="text-[11px] text-neutral-400 font-mono truncate">
+                Package: com.smartdialer.telecom • Target Android 14+ (API 34/35)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap self-stretch sm:self-auto justify-end">
+            <div className="px-2.5 py-1 rounded-xl bg-neutral-900/80 border border-emerald-500/30 text-[10px] text-emerald-300 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>কল পারমিশন সক্রিয়</span>
+            </div>
+            <div className="px-2.5 py-1 rounded-xl bg-neutral-900/80 border border-cyan-500/30 text-[10px] text-cyan-300 flex items-center gap-1.5">
+              <span>Google Account Chooser</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Title */}
       <div className="space-y-1">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold">

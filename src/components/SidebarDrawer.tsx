@@ -24,6 +24,8 @@ import {
   Check,
   Radio,
   ExternalLink,
+  Compass,
+  Navigation,
 } from 'lucide-react';
 import { AppTab, CallerIdRecord } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
@@ -42,6 +44,7 @@ export interface SidebarDrawerProps {
   isDefaultDialer: boolean;
   onOpenPermissionModal: (tab?: 'dialog' | 'permissions' | 'settings' | 'backup' | 'code') => void;
   onSimulateIncoming: (caller: CallerIdRecord) => void;
+  onOpenDualMap?: () => void;
   syncStatus: CloudSyncStatus;
   onOpenAuth: () => void;
   onOpenBackup: () => void;
@@ -64,6 +67,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   isDefaultDialer,
   onOpenPermissionModal,
   onSimulateIncoming,
+  onOpenDualMap,
   syncStatus,
   onOpenAuth,
   onOpenBackup,
@@ -397,6 +401,39 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                   </button>
                 );
               })}
+
+              {/* Dedicated Dual Location Satellite Radar Card */}
+              {onOpenDualMap && (
+                <button
+                  id="sidebar-dual-location-radar-btn"
+                  type="button"
+                  onClick={() => {
+                    onOpenDualMap();
+                    onClose();
+                  }}
+                  className="w-full mt-2 p-3 rounded-2xl bg-gradient-to-r from-sky-950/60 to-emerald-950/60 border border-sky-500/30 hover:border-sky-500/60 text-left transition flex items-center justify-between gap-3 group shadow-xs cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-sky-600/20 border border-sky-500/40 text-sky-400 flex items-center justify-center shrink-0">
+                      <Compass className="w-5 h-5 group-hover:rotate-45 transition-transform" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-bold text-sky-200 truncate">
+                          {isBn ? 'ডুয়াল লোকেশন রেডার ও ম্যাপ' : 'Dual Location Satellite Radar'}
+                        </p>
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40">
+                          A-GPS
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-neutral-400 truncate mt-0.5">
+                        {isBn ? 'টাওয়ার ডাটা ছাড়াই অফলাইন জিপিএস ম্যাপিং' : 'Offline Satellite Map & Dead Reckoning'}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-sky-400 shrink-0" />
+                </button>
+              )}
             </div>
           </div>
 

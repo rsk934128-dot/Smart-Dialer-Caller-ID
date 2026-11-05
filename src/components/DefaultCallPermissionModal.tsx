@@ -631,6 +631,31 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
           {/* TAB 2: All Permissions & Background Controls */}
           {activeTab === 'permissions' && (
             <div className="space-y-2.5">
+              {/* Permission Settings Recovery Banner */}
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 dark:border-amber-700/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    <h4 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
+                      {isBn ? 'পারমিশন রিজেক্ট হয়ে গেলে কী করবেন?' : 'Denied a permission by accident?'}
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                    {isBn ? 'সেটিংস গাইড' : 'Settings Guide'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                  {isBn
+                    ? 'অ্যান্ড্রয়েড প্রম্পটে ভুলবশত "Don\'t ask again" বা "Deny" দিয়ে থাকলে ফোনের সেটিংস থেকে সহজেই তা পুনরায় চালু করা যায়:'
+                    : 'If you accidentally clicked "Deny" or "Don\'t ask again", you can quickly re-enable it in Android Settings:'}
+                </p>
+                <div className="p-2.5 rounded-xl bg-neutral-900/90 text-neutral-200 text-[11px] font-mono space-y-1">
+                  <div>1. ফোন <strong>Settings</strong> &gt; <strong>Apps</strong> &gt; <strong>Smart Dialer</strong></div>
+                  <div>2. <strong>Permissions</strong> &gt; Phone, Contacts, Call Logs "Allow" করুন</div>
+                  <div>3. <strong>Display over other apps</strong> অন করুন (ফ্লোটিং কলার আইডির জন্য)</div>
+                </div>
+              </div>
+
               {/* Permission: CALL_PHONE (Real Direct Calling) */}
               <div className="p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 flex items-center justify-between gap-3">
                 <div className="flex items-start gap-2.5">

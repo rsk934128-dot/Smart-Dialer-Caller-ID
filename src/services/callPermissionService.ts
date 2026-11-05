@@ -369,6 +369,77 @@ class CallPermissionService {
     }
     return false;
   }
+
+  /**
+   * Default SIM Slot Preference ('1' | '2' | 'always_ask')
+   */
+  public getDefaultSimSlot(): 1 | 2 | 'always_ask' {
+    try {
+      const saved = localStorage.getItem('smart_dialer_default_sim');
+      if (saved === '1' || saved === '2') return Number(saved) as 1 | 2;
+      if (saved === 'always_ask') return 'always_ask';
+    } catch {}
+    return 1;
+  }
+
+  public setDefaultSimSlot(slot: 1 | 2 | 'always_ask') {
+    try {
+      localStorage.setItem('smart_dialer_default_sim', String(slot));
+      this.notify();
+    } catch (e) {
+      console.error('Failed to save default SIM slot:', e);
+    }
+  }
+
+  /**
+   * User-customizable SIM operator labels (e.g. GP, Robi, Banglalink, Teletalk, Airtel)
+   */
+  public getSimOperatorLabels(): { sim1: string; sim2: string } {
+    try {
+      const saved = localStorage.getItem('smart_dialer_sim_operators');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { sim1: 'GP / Grameen', sim2: 'Robi / BL' };
+  }
+
+  public setSimOperatorLabels(labels: Partial<{ sim1: string; sim2: string }>) {
+    try {
+      const current = this.getSimOperatorLabels();
+      const updated = { ...current, ...labels };
+      localStorage.setItem('smart_dialer_sim_operators', JSON.stringify(updated));
+      this.notify();
+    } catch (e) {
+      console.error('Failed to save SIM operators:', e);
+    }
+  }
+
+  /**
+   * Permission Settings Recovery Guide for Android App Info
+   */
+  public getSettingsRecoveryGuide(lang: 'bn' | 'en' = 'bn') {
+    if (lang === 'bn') {
+      return {
+        title: 'অ্যান্ড্রয়েড ফোন সেটিংস থেকে পারমিশন পুনরায় চালু করার নিয়ম',
+        steps: [
+          'আপনার ফোনের Settings (সেটিংস) এ প্রবেশ করুন।',
+          'Apps / App Management (অ্যাপ্লিকেশন) অপশনে চাপুন।',
+          '"Smart Dialer" খুঁজে বের করে তাতে ট্যাপ করুন।',
+          'Permissions (অনুমতিসমূহ) এ গিয়ে "Phone", "Call logs", "Contacts", এবং "Microphone" এর পাশে "Allow" করে দিন।',
+          'লক স্ক্রিনের ওপর কলার আইডি দেখতে "Display over other apps" (অন্যান্য অ্যাপের উপর প্রদর্শন) অন করে দিন।',
+        ],
+      };
+    }
+    return {
+      title: 'How to Re-enable Permissions in Android Settings',
+      steps: [
+        'Open your phone Settings app.',
+        'Navigate to Apps or Application Management.',
+        'Locate and tap "Smart Dialer".',
+        'Tap Permissions and set "Phone", "Call logs", "Contacts", and "Microphone" to "Allow".',
+        'Enable "Display over other apps" for the Truecaller-style floating caller ID.',
+      ],
+    };
+  }
 }
 
 export const callPermissionService = new CallPermissionService();
