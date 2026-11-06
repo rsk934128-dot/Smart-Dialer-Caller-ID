@@ -84,6 +84,7 @@ export default function App() {
     'dialog' | 'permissions' | 'settings' | 'backup' | 'code'
   >('dialog');
   const [isDefaultDialer, setIsDefaultDialer] = useState<boolean>(() => callPermissionService.isDefault());
+  const [isDefaultSms, setIsDefaultSms] = useState<boolean>(() => callPermissionService.isDefaultSms());
   const [realCallToast, setRealCallToast] = useState<{ show: boolean; phone: string; name?: string } | null>(null);
 
   const handleOpenPermissionModal = (
@@ -242,10 +243,11 @@ export default function App() {
     };
   }, []);
 
-  // Subscribe to Default Call Permissions
+  // Subscribe to Default Call & SMS Permissions
   useEffect(() => {
-    const unsubPerms = callPermissionService.subscribe((_perms, isDefault) => {
+    const unsubPerms = callPermissionService.subscribe((_perms, isDefault, _mode, isDefaultSmsRole) => {
       setIsDefaultDialer(isDefault);
+      setIsDefaultSms(isDefaultSmsRole);
     });
     return () => {
       unsubPerms();
@@ -744,6 +746,7 @@ export default function App() {
           lang={lang}
           onToggleLang={() => setLang((prev) => (prev === 'bn' ? 'en' : 'bn'))}
           isDefaultDialer={isDefaultDialer}
+          isDefaultSms={isDefaultSms}
           onToggleDefaultDialer={() => {
             const next = !isDefaultDialer;
             callPermissionService.setDefaultDialer(next);
@@ -758,9 +761,10 @@ export default function App() {
           onOpenSidebar={() => setIsSidebarOpen(true)}
         />
 
-        {/* Default Phone App Permission Status Banner */}
+        {/* Default Phone & SMS Permissions Status Banner */}
         <DefaultCallPermissionBanner
           isDefault={isDefaultDialer}
+          isDefaultSms={isDefaultSms}
           onOpenModal={() => setIsPermissionModalOpen(true)}
           lang={lang}
         />
@@ -1018,6 +1022,7 @@ export default function App() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         isDefaultDialer={isDefaultDialer}
+        isDefaultSms={isDefaultSms}
         onOpenPermissionModal={handleOpenPermissionModal}
         onSimulateIncoming={handleSimulateIncoming}
         syncStatus={syncStatus}

@@ -18,20 +18,22 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocFromServer,
   collection,
   getDocs,
   deleteDoc,
   onSnapshot,
   persistentLocalCache,
   persistentMultipleTabManager,
+  memoryLocalCache,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with auto-detect long polling and multi-tab persistent cache
-// This prevents 10-second backend connection timeouts in preview iframes and mobile webviews
+// Initialize Firestore with forced long polling and multi-tab persistent cache
+// Using experimentalForceLongPolling eliminates the 10-second WebSocket handshake timeout in preview iframes
 let dbInstance;
 const databaseId = (firebaseConfig as any).firestoreDatabaseId;
 
@@ -39,7 +41,7 @@ try {
   dbInstance = initializeFirestore(
     app,
     {
-      experimentalAutoDetectLongPolling: true,
+      experimentalForceLongPolling: true,
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager(),
       }),
@@ -47,11 +49,36 @@ try {
     databaseId
   );
 } catch {
-  dbInstance = getFirestore(app, databaseId);
+  try {
+    dbInstance = initializeFirestore(
+      app,
+      {
+        experimentalForceLongPolling: true,
+        localCache: memoryLocalCache(),
+      },
+      databaseId
+    );
+  } catch {
+    dbInstance = getFirestore(app, databaseId);
+  }
 }
 
 export const db = dbInstance;
 export const auth = getAuth(app);
+
+// Validate connection to Firestore as per Firebase skill guidelines
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('Firestore client operating in offline mode. Local Room DB handling all persistence.');
+    }
+  }
+}
+if (typeof window !== 'undefined') {
+  testConnection().catch(() => {});
+}
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });

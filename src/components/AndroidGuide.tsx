@@ -31,7 +31,18 @@ export const AndroidGuide: React.FC<AndroidGuideProps> = ({ lang, onSimulateInco
   const t = TRANSLATIONS[lang];
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    'permissions_simulator' | 'manifest' | 'runtime_permissions' | 'rolemanager' | 'incallservice' | 'callerid_overlay' | 'callstate_receiver' | 'room_database' | 'architecture' | 'pwabuilder' | 'apk_troubleshoot'
+    | 'permissions_simulator'
+    | 'apk_logo'
+    | 'manifest'
+    | 'runtime_permissions'
+    | 'rolemanager'
+    | 'incallservice'
+    | 'callerid_overlay'
+    | 'callstate_receiver'
+    | 'room_database'
+    | 'architecture'
+    | 'pwabuilder'
+    | 'apk_troubleshoot'
   >('permissions_simulator');
 
   // Simulator state for Android permissions
@@ -912,6 +923,15 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap self-stretch sm:self-auto justify-end">
+            <button
+              id="header-open-apk-logo-btn"
+              type="button"
+              onClick={() => setActiveTab('apk_logo')}
+              className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-neutral-950 font-bold text-[11px] shadow-sm flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>এপিকে লোগো ও এসেট</span>
+            </button>
             <div className="px-2.5 py-1 rounded-xl bg-neutral-900/80 border border-emerald-500/30 text-[10px] text-emerald-300 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               <span>কল পারমিশন সক্রিয়</span>
@@ -948,6 +968,18 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
           }`}
         >
           পারমিশন সিমুলেটর
+        </button>
+        <button
+          id="tab-apk-logo"
+          onClick={() => setActiveTab('apk_logo')}
+          className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition flex items-center gap-1.5 ${
+            activeTab === 'apk_logo'
+              ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 text-white shadow-xs font-bold'
+              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>এপিকে লোগো ও এসেট</span>
         </button>
         <button
           onClick={() => setActiveTab('manifest')}
@@ -1794,6 +1826,273 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
             <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
               এপিকে ফাইলের কোনো ঝামেলা ছাড়াই আপনার ফোনের <strong>Google Chrome</strong> ব্রাউজারে সাইটটি ওপেন করে উপরের <strong>"ফোনে ইনস্টল করুন"</strong> বোতামে চাপলেই এটি তাৎক্ষণিকভাবে আপনার হোমস্ক্রিনে ফুলস্ক্রিন নেটিভ অ্যাপ হয়ে যাবে।
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* 2. APK LOGO & LAUNCHER ASSETS SHOWCASE TAB */}
+      {activeTab === 'apk_logo' && (
+        <div className="space-y-5 animate-in fade-in">
+          {/* Hero Banner */}
+          <div className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 border border-emerald-500/30 shadow-2xl">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-emerald-500/10 via-cyan-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
+              {/* 3D Logo Showcase Frame */}
+              <div className="relative group shrink-0">
+                <div className="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-emerald-500 via-cyan-400 to-emerald-600 opacity-75 blur-md group-hover:opacity-100 transition duration-500 animate-pulse" />
+                <div className="relative p-1.5 rounded-3xl bg-neutral-950/90 border border-emerald-400/50 shadow-2xl">
+                  <img
+                    src="/app-logo.png"
+                    alt="Smart Dialer 3D Cyber Emblem Logo"
+                    className="w-40 h-40 sm:w-48 sm:h-48 rounded-2xl object-cover shadow-2xl"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute bottom-3 left-3 right-3 text-center">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-neutral-950/80 text-emerald-400 border border-emerald-500/40 backdrop-blur-xs shadow-sm">
+                      512 × 512 HD Master
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Logo Identity Details & Actions */}
+              <div className="space-y-3 text-center md:text-left flex-1 min-w-0">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>অফিশিয়াল ৩ডি এপিকে অ্যাপ লোগো (Cyber Shield Edition)</span>
+                </div>
+
+                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  Smart Dialer & Caller ID APK Logo
+                </h3>
+
+                <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-xl">
+                  অ্যান্ড্রয়েড নেটিভ APK এবং প্লে স্টোরের জন্য বিশেষভাবে ডিজাইনকৃত <strong>3D Cyber Shield Emblem</strong>। এটি সাইবার সিকিউরিটি শিল্ড, নিয়ন এমারেল্ড ফোন হ্যান্ডসেট, রাডার ফ্রিকোয়েন্সি ওয়েভ এবং ডুয়াল সিম মাইক্রোচিপের সমন্বয়ে তৈরি একটি আধুনিক এন্টারপ্রাইজ ব্র্যান্ডিং।
+                </p>
+
+                <div className="pt-2 flex flex-wrap items-center justify-center md:justify-start gap-2.5">
+                  <a
+                    href="/app-logo.png"
+                    download="smart-dialer-apk-logo.png"
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-neutral-950 font-bold text-xs shadow-md transition flex items-center gap-2 active:scale-95"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>লোগো ডাউনলোড করুন (512x512 PNG)</span>
+                  </a>
+
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('public/app-logo.png');
+                      setCopiedKey('logo_path');
+                      setTimeout(() => setCopiedKey(null), 2000);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-medium transition flex items-center gap-1.5"
+                  >
+                    {copiedKey === 'logo_path' ? (
+                      <>
+                        <Check className="w-4 h-4 text-emerald-400" />
+                        <span className="text-emerald-400 font-semibold">পাথ কপি হয়েছে!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>রিসোর্স পাথ কপি</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Design Anatomy & Symbolism Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="p-4 rounded-2xl bg-neutral-900/60 border border-emerald-500/20 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
+                ১
+              </div>
+              <h4 className="text-xs font-bold text-white">সাইবার শিল্ড আর্মার</h4>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                ডার্ক মেটালিক ফ্রস্টেড গ্লাস ও সাইবার বর্ডার যা স্প্যাম কল, ফিশিং ও জালিয়াতি থেকে ১০০% ইনকামিং কল সুরক্ষাকে নির্দেশ করে।
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-900/60 border border-cyan-500/20 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-sm">
+                ২
+              </div>
+              <h4 className="text-xs font-bold text-white">নিয়ন ফোন হ্যান্ডসেট</h4>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                এমারেল্ড-সায়ান গ্লোয়িং টেলিফোন প্রতীক যা ক্রিস্টাল ক্লিয়ার HD অডিও কোয়ালিটি এবং দ্রুত ওয়ান-ট্যাপ ডায়ালিং প্রতিনিধিত্ব করে।
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-900/60 border border-emerald-500/20 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
+                ৩
+              </div>
+              <h4 className="text-xs font-bold text-white">রাডার ওয়েভ ও কলার আইডি</h4>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                রিয়েল-টাইম কলার নাম স্ক্যানিং, ট্রুকলার স্টাইল স্প্যাম ডেটাবেস এবং টাওয়ার ডাটা ছাড়াই অফলাইন জিপিএস ম্যাপিং রাডার।
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-900/60 border border-amber-500/20 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm">
+                ৪
+              </div>
+              <h4 className="text-xs font-bold text-white">ডুয়াল সিম মাইক্রোচিপ</h4>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                সরাসরি এপিকে লোগোর ভেতরে খোদাই করা গোল্ডেন চিপ — যা গ্রামীণফোন, রবি, বাংলালিংক ও যেকোনো ডুয়াল সিমের সাপোর্ট নিশ্চিত করে।
+              </p>
+            </div>
+          </div>
+
+          {/* Android Launcher Mipmap Matrix Card */}
+          <div className="p-5 rounded-3xl bg-neutral-900/70 border border-neutral-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-emerald-400" />
+                  <span>অ্যান্ড্রয়েড লঞ্চার আইকন ম্যাট্রিক্স (res/mipmap-*)</span>
+                </h4>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  সব ধরনের অ্যান্ড্রয়েড স্ক্রিন ডেনসিটির জন্য প্রি-কনভার্ট করা ও অপটিমাইজড আইকন
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 self-start sm:self-auto">
+                Ready for APK Build
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+              {[
+                { name: 'mipmap-mdpi', res: '48 × 48 px', density: '1.0x Baseline', file: 'ic_launcher.png' },
+                { name: 'mipmap-hdpi', res: '72 × 72 px', density: '1.5x HD', file: 'ic_launcher.png' },
+                { name: 'mipmap-xhdpi', res: '96 × 96 px', density: '2.0x X-HD', file: 'ic_launcher.png' },
+                { name: 'mipmap-xxhdpi', res: '144 × 144 px', density: '3.0x XX-HD', file: 'ic_launcher.png' },
+                { name: 'mipmap-xxxhdpi', res: '192 × 192 px', density: '4.0x XXX-HD', file: 'ic_launcher.png' },
+                { name: 'Play Store Master', res: '512 × 512 px', density: 'Web & Store', file: 'app-logo.png' },
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-2xl bg-neutral-950/70 border border-neutral-800/80 text-center space-y-2 hover:border-emerald-500/40 transition"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-neutral-900 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-md overflow-hidden p-1">
+                    <img
+                      src="/app-logo.png"
+                      alt={item.name}
+                      className="w-full h-full object-contain rounded-xl"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-mono font-bold text-neutral-200 truncate">
+                      {item.name}
+                    </p>
+                    <p className="text-[10px] text-emerald-400 font-semibold">{item.res}</p>
+                    <p className="text-[9px] text-neutral-500">{item.density}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Android Home Screen Mockup Preview */}
+          <div className="p-5 rounded-3xl bg-neutral-900/70 border border-neutral-800 space-y-4">
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              <Layers className="w-4 h-4 text-cyan-400" />
+              <span>অ্যান্ড্রয়েড ফোন স্ক্রিনে অ্যাপ লঞ্চার প্রিভিউ</span>
+            </h4>
+
+            {/* Mobile Dock Simulation */}
+            <div className="p-6 rounded-3xl bg-gradient-to-b from-neutral-950 via-slate-950 to-neutral-900 border border-neutral-800 text-center max-w-md mx-auto space-y-5">
+              <p className="text-[11px] text-neutral-400">
+                ব্যবহারকারীর অ্যান্ড্রয়েড ফোনের হোমস্ক্রিন ডকে আমাদের অ্যাপ যেভাবে প্রদর্শিত হবে:
+              </p>
+
+              <div className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-700/60 backdrop-blur-md flex items-center justify-around gap-2 shadow-xl">
+                {/* 1. Our App */}
+                <div className="flex flex-col items-center gap-1.5 group cursor-pointer">
+                  <div className="relative">
+                    <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-70 blur-xs group-hover:opacity-100 transition" />
+                    <img
+                      src="/app-logo.png"
+                      alt="Smart Dialer"
+                      className="relative w-12 h-12 rounded-2xl object-cover shadow-lg border border-emerald-400"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <span className="text-[10px] font-bold text-white tracking-tight">Smart Dialer</span>
+                </div>
+
+                {/* 2. Messages */}
+                <div className="flex flex-col items-center gap-1.5 opacity-60">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                    </svg>
+                  </div>
+                  <span className="text-[10px] text-neutral-400 font-medium">Messages</span>
+                </div>
+
+                {/* 3. Chrome */}
+                <div className="flex flex-col items-center gap-1.5 opacity-60">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="12" cy="12" r="10" />
+                    </svg>
+                  </div>
+                  <span className="text-[10px] text-neutral-400 font-medium">Chrome</span>
+                </div>
+
+                {/* 4. Camera */}
+                <div className="flex flex-col items-center gap-1.5 opacity-60">
+                  <div className="w-12 h-12 rounded-2xl bg-neutral-800 text-white flex items-center justify-center shadow-md border border-neutral-700">
+                    <svg className="w-6 h-6 text-neutral-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                      <circle cx="12" cy="13" r="4" />
+                    </svg>
+                  </div>
+                  <span className="text-[10px] text-neutral-400 font-medium">Camera</span>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-emerald-400 font-mono">
+                ✓ Android 14 Adaptive Icon Supported (Circle & Squircle)
+              </div>
+            </div>
+          </div>
+
+          {/* AndroidManifest.xml Integration Snippet */}
+          <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-neutral-300">
+                android/app/src/main/AndroidManifest.xml
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`<application\n    android:label="@string/app_name"\n    android:icon="@mipmap/ic_launcher"\n    android:roundIcon="@mipmap/ic_launcher_round"\n    android:theme="@style/Theme.SmartDialer">`);
+                  setCopiedKey('manifest_icon');
+                  setTimeout(() => setCopiedKey(null), 2000);
+                }}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
+              >
+                {copiedKey === 'manifest_icon' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedKey === 'manifest_icon' ? 'কপি হয়েছে' : 'কোড কপি'}</span>
+              </button>
+            </div>
+            <pre className="text-[11px] font-mono text-neutral-300 bg-neutral-900 p-3 rounded-xl overflow-x-auto leading-relaxed border border-neutral-800">
+{`<application
+    android:name=".SmartDialerApplication"
+    android:label="@string/app_name"
+    android:icon="@mipmap/ic_launcher"
+    android:roundIcon="@mipmap/ic_launcher_round"
+    android:theme="@style/Theme.SmartDialer">
+    <!-- Main Default Telephone Dialer Activity -->
+</application>`}
+            </pre>
           </div>
         </div>
       )}

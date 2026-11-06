@@ -27,6 +27,7 @@ interface HeaderProps {
   lang: Language;
   onToggleLang: () => void;
   isDefaultDialer: boolean;
+  isDefaultSms?: boolean;
   onToggleDefaultDialer: () => void;
   onSimulateIncoming: (caller: CallerIdRecord) => void;
   syncStatus: CloudSyncStatus;
@@ -42,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
   lang,
   onToggleLang,
   isDefaultDialer,
+  isDefaultSms = false,
   onToggleDefaultDialer,
   onSimulateIncoming,
   syncStatus,
@@ -130,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
             <h1 className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-neutral-100 leading-tight truncate">
               {t.appTitle}
             </h1>
-            {/* Role Manager Badge */}
+            {/* Role Manager Badge: Shows Call & SMS Status */}
             <button
               id="role-manager-badge-btn"
               onClick={() => {
@@ -140,18 +142,37 @@ export const Header: React.FC<HeaderProps> = ({
                   setShowRoleDialog(true);
                 }
               }}
-              className={`inline-flex items-center gap-1 text-[10px] font-semibold transition px-1.5 py-0.5 rounded-md truncate max-w-full ${
-                isDefaultDialer
-                  ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
-                  : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 animate-pulse'
+              className={`inline-flex items-center gap-1.5 text-[10px] font-semibold transition px-2 py-0.5 rounded-full truncate max-w-full cursor-pointer shadow-2xs ${
+                isDefaultDialer && isDefaultSms
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                  : isDefaultDialer
+                  ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 hover:bg-blue-500/25'
+                  : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 animate-pulse'
               }`}
+              title={
+                isDefaultDialer && isDefaultSms
+                  ? (lang === 'bn' ? 'ডিফল্ট কল ও মেসেজ অ্যাপ সক্রিয়' : 'Call & SMS Default Active')
+                  : isDefaultDialer
+                  ? (lang === 'bn' ? 'কলিং সক্রিয় · মেসেজ পারমিশন দিন' : 'Call Active · SMS Pending')
+                  : (lang === 'bn' ? 'ডিফল্ট পারমিশন অন করুন' : 'Enable Default Roles')
+              }
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isDefaultDialer ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                  isDefaultDialer && isDefaultSms
+                    ? 'bg-emerald-500 animate-pulse'
+                    : isDefaultDialer
+                    ? 'bg-blue-500'
+                    : 'bg-amber-500 animate-ping'
                 }`}
               />
-              <span className="truncate">{isDefaultDialer ? t.activeStatus : t.inactiveStatus}</span>
+              <span className="truncate">
+                {isDefaultDialer && isDefaultSms
+                  ? (lang === 'bn' ? 'কল ও SMS সক্রিয়' : 'Call & SMS Active')
+                  : isDefaultDialer
+                  ? (lang === 'bn' ? 'কলিং সক্রিয় · SMS দিন' : 'Call Active')
+                  : (lang === 'bn' ? 'পারমিশন দিন' : 'Set Default')}
+              </span>
             </button>
           </div>
         </div>

@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Compass,
   Navigation,
+  Zap,
 } from 'lucide-react';
 import { AppTab, CallerIdRecord } from '../types';
 import { Language, TRANSLATIONS } from '../utils/i18n';
@@ -42,6 +43,7 @@ export interface SidebarDrawerProps {
   theme: ThemeMode;
   onToggleTheme: () => void;
   isDefaultDialer: boolean;
+  isDefaultSms?: boolean;
   onOpenPermissionModal: (tab?: 'dialog' | 'permissions' | 'settings' | 'backup' | 'code') => void;
   onSimulateIncoming: (caller: CallerIdRecord) => void;
   onOpenDualMap?: () => void;
@@ -65,6 +67,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   theme,
   onToggleTheme,
   isDefaultDialer,
+  isDefaultSms = false,
   onOpenPermissionModal,
   onSimulateIncoming,
   onOpenDualMap,
@@ -294,48 +297,96 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
 
         {/* Scrollable Content Body */}
         <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-5">
-          {/* Default Phone App Role Status Banner */}
-          <div
-            id="sidebar-role-status-card"
-            className={`p-3 rounded-2xl border transition-all ${
-              isDefaultDialer
-                ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200'
-                : 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div
-                  className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
-                    isDefaultDialer ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'
+          {/* Dual Role Status Banner (Phone & SMS) */}
+          <div className="space-y-2">
+            {/* 1. Default Phone App Role */}
+            <div
+              id="sidebar-role-status-card"
+              className={`p-3 rounded-2xl border transition-all ${
+                isDefaultDialer
+                  ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200'
+                  : 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                      isDefaultDialer ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'
+                    }`}
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold leading-tight truncate">
+                      {isBn ? 'ডিফল্ট ফোন অ্যাপ' : 'Default Phone App'}
+                    </p>
+                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
+                      {isDefaultDialer ? (isBn ? 'ROLE_DIALER সক্রিয়' : 'Active (ROLE_DIALER)') : (isBn ? 'অনুমতি প্রয়োজন' : 'Action Required')}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenPermissionModal('dialog');
+                  }}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition shadow-2xs ${
+                    isDefaultDialer
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                      : 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
                   }`}
                 >
-                  <PhoneCall className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold leading-tight truncate">
-                    {t.defaultAppBannerTitle}
-                  </p>
-                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
-                    {isDefaultDialer ? t.defaultRoleActive : t.inactiveStatus}
-                  </p>
-                </div>
+                  {isDefaultDialer ? (isBn ? 'ম্যানেজ' : 'Manage') : (isBn ? 'সেট করুন' : 'Set Role')}
+                </button>
               </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenPermissionModal('dialog');
-                }}
-                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition shadow-2xs ${
-                  isDefaultDialer
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                    : 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
-                }`}
-              >
-                {isDefaultDialer ? (isBn ? 'ম্যানেজ' : 'Manage') : (isBn ? 'সেট করুন' : 'Set Role')}
-              </button>
+            {/* 2. Default SMS App Role (Google Messages) */}
+            <div
+              id="sidebar-sms-role-status-card"
+              className={`p-3 rounded-2xl border transition-all ${
+                isDefaultSms
+                  ? 'bg-blue-50/70 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/60 text-blue-900 dark:text-blue-200'
+                  : 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                      isDefaultSms ? 'bg-blue-600 text-white' : 'bg-amber-500 text-white'
+                    }`}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold leading-tight truncate">
+                      {isBn ? 'ডিফল্ট মেসেজ অ্যাপ' : 'Default SMS App'}
+                    </p>
+                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
+                      {isDefaultSms ? (isBn ? 'ROLE_SMS সক্রিয়' : 'Active (ROLE_SMS)') : (isBn ? 'অনুমতি প্রয়োজন' : 'Action Required')}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenPermissionModal('dialog');
+                  }}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold shrink-0 transition shadow-2xs ${
+                    isDefaultSms
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                      : 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
+                  }`}
+                >
+                  {isDefaultSms ? (isBn ? 'ম্যানেজ' : 'Manage') : (isBn ? 'অন করুন' : 'Enable')}
+                </button>
+              </div>
             </div>
           </div>
 

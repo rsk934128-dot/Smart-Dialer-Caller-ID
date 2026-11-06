@@ -154,11 +154,18 @@ class CloudSyncService {
       const callLogsRef = collection(db, 'users', user.uid, 'call_logs');
       const blockedRef = collection(db, 'users', user.uid, 'blocked_numbers');
 
-      // 1. Check existing cloud contacts
-      const [cloudContactsSnap, cloudLogsSnap, cloudBlockedSnap] = await Promise.all([
-        getDocs(contactsRef),
-        getDocs(callLogsRef),
-        getDocs(blockedRef),
+      // 1. Check existing cloud contacts with an 8-second safety timeout
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore network timeout - fallback to Room DB')), 8000)
+      );
+
+      const [cloudContactsSnap, cloudLogsSnap, cloudBlockedSnap] = await Promise.race([
+        Promise.all([
+          getDocs(contactsRef),
+          getDocs(callLogsRef),
+          getDocs(blockedRef),
+        ]),
+        timeoutPromise,
       ]);
 
       const cloudContacts: Contact[] = [];
@@ -214,8 +221,13 @@ class CloudSyncService {
         },
         (err) => {
           const errCode = (err as any)?.code || '';
-          if (errCode === 'unavailable' || err.message?.includes('offline')) {
-            console.warn('Firestore offline; local Room DB serving contacts.');
+          const errMsg = err.message || '';
+          if (
+            errCode === 'unavailable' ||
+            errMsg.includes('offline') ||
+            errMsg.includes('Could not reach Cloud Firestore')
+          ) {
+            console.info('Firestore offline; local Room DB serving contacts.');
             return;
           }
           handleFirestoreError(err, OperationType.GET, `users/${user.uid}/contacts`);
@@ -234,8 +246,13 @@ class CloudSyncService {
         },
         (err) => {
           const errCode = (err as any)?.code || '';
-          if (errCode === 'unavailable' || err.message?.includes('offline')) {
-            console.warn('Firestore offline; local Room DB serving call logs.');
+          const errMsg = err.message || '';
+          if (
+            errCode === 'unavailable' ||
+            errMsg.includes('offline') ||
+            errMsg.includes('Could not reach Cloud Firestore')
+          ) {
+            console.info('Firestore offline; local Room DB serving call logs.');
             return;
           }
           handleFirestoreError(err, OperationType.GET, `users/${user.uid}/call_logs`);
@@ -255,10 +272,12 @@ class CloudSyncService {
       const isOfflineErr =
         errMsg.toLowerCase().includes('unavailable') ||
         errMsg.toLowerCase().includes('offline') ||
+        errMsg.toLowerCase().includes('timeout') ||
+        errMsg.toLowerCase().includes('could not reach cloud firestore') ||
         errMsg.toLowerCase().includes('failed to get document');
 
       if (isOfflineErr) {
-        console.warn('Firestore backend unavailable. Local Room DB active.');
+        console.info('Firestore backend deferred/offline. Local Room DB active.');
         this.updateStatus({
           isSyncing: false,
           isCloudConnected: false,

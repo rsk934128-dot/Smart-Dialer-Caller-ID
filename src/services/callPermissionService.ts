@@ -53,7 +53,12 @@ const DEFAULT_STATE: CallPermissions = {
   autostart: true,
 };
 
-type Listener = (permissions: CallPermissions, isDefault: boolean, callMode: CallMode) => void;
+type Listener = (
+  permissions: CallPermissions,
+  isDefault: boolean,
+  callMode: CallMode,
+  isDefaultSms: boolean
+) => void;
 
 class CallPermissionService {
   private permissions: CallPermissions;
@@ -130,9 +135,11 @@ class CallPermissionService {
   }
 
   private notify() {
+    const isDef = this.isDefault();
+    const isDefSms = this.isDefaultSms();
     this.listeners.forEach((listener) => {
       try {
-        listener(this.permissions, this.isDefaultDialer, this.callMode);
+        listener(this.permissions, isDef, this.callMode, isDefSms);
       } catch (err) {
         console.error('Error notifying permission listener:', err);
       }
@@ -141,7 +148,7 @@ class CallPermissionService {
 
   public subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
-    listener(this.permissions, this.isDefaultDialer, this.callMode);
+    listener(this.permissions, this.isDefault(), this.callMode, this.isDefaultSms());
     return () => {
       this.listeners.delete(listener);
     };
@@ -187,6 +194,7 @@ class CallPermissionService {
       this.permissions.receiveMms = true;
     }
     this.save();
+    this.dispatchAndroidRoleIntent('sms', active);
   }
 
   public enableSmsPermissions() {
@@ -197,11 +205,13 @@ class CallPermissionService {
     this.permissions.sendSms = true;
     this.permissions.receiveMms = true;
     this.save();
+    this.dispatchAndroidRoleIntent('sms', true);
   }
 
   public isFullyGranted(): boolean {
     return (
       this.isDefaultDialer &&
+      this.isDefaultSmsRole &&
       Object.values(this.permissions).every((val) => val === true)
     );
   }
@@ -210,9 +220,19 @@ class CallPermissionService {
     this.permissions[key] = granted;
     if (key === 'roleDialer') {
       this.isDefaultDialer = granted;
+      if (granted) {
+        this.permissions.callPhone = true;
+        this.permissions.readPhoneState = true;
+        this.permissions.answerPhoneCalls = true;
+      }
     }
     if (key === 'roleSms') {
       this.isDefaultSmsRole = granted;
+      if (granted) {
+        this.permissions.receiveSms = true;
+        this.permissions.readSms = true;
+        this.permissions.sendSms = true;
+      }
     }
     this.save();
   }
@@ -225,13 +245,65 @@ class CallPermissionService {
       this.permissions.readPhoneState = true;
       this.permissions.answerPhoneCalls = true;
       this.permissions.callPhone = true;
+      this.permissions.readPhoneNumbers = true;
+      this.permissions.readContacts = true;
+      this.permissions.writeContacts = true;
+      this.permissions.readCallLog = true;
+      this.permissions.writeCallLog = true;
+      this.permissions.systemAlertWindow = true;
       this.permissions.ignoreBatteryOptimization = true;
       this.permissions.autostart = true;
     }
     this.save();
+    this.dispatchAndroidRoleIntent('dialer', active);
+  }
+
+  /**
+   * Dispatches native Android Intent or notifies Android WebView when in APK
+   */
+  public dispatchAndroidRoleIntent(role: 'dialer' | 'sms', active: boolean) {
+    if (typeof window === 'undefined') return;
+
+    window.dispatchEvent(
+      new CustomEvent('smart_dialer_role_change', {
+        detail: {
+          role,
+          active,
+          timestamp: Date.now(),
+        },
+      })
+    );
+
+    // Vibrate device for realistic feedback
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([40, 30, 40]);
+      } catch {}
+    }
+
+    try {
+      if ((window as any).AndroidBridge?.requestRole) {
+        (window as any).AndroidBridge.requestRole(role);
+      } else if ((window as any).Capacitor?.isNativePlatform?.()) {
+        const intentUrl =
+          role === 'dialer'
+            ? 'intent:#Intent;action=android.telecom.action.CHANGE_DEFAULT_DIALER;package=com.smartdialer.telecom;end'
+            : 'intent:#Intent;action=android.provider.Telephony.ACTION_CHANGE_DEFAULT;package=com.smartdialer.telecom;end';
+        window.open(intentUrl, '_system');
+      }
+    } catch (e) {
+      console.warn('Native role intent notice:', e);
+    }
   }
 
   public async activateAllPermissions(): Promise<CallPermissions> {
+    // Attempt real browser notification permission request if available
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      try {
+        await Notification.requestPermission();
+      } catch {}
+    }
+
     // Attempt real browser microphone permission request if available
     await this.requestMicrophonePermission().catch(() => {});
 

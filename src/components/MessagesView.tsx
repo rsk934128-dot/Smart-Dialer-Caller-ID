@@ -21,6 +21,7 @@ import {
   Settings,
   Tag,
   User,
+  Zap,
 } from 'lucide-react';
 import { SmsMessage, SmsThread, Contact, SmsCategory } from '../types';
 import { smsService } from '../services/smsService';
@@ -635,6 +636,42 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Actionable Banner if Default SMS role is not active */}
+            {!hasSmsRole && (
+              <div
+                id="sms-permission-needed-banner"
+                className="p-3 rounded-2xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800/60 flex items-center justify-between gap-2.5 animate-in fade-in"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate">
+                      {isBn ? 'Google মেসেজ ডিফল্ট পারমিশন অন করুন' : 'Enable Default SMS Role'}
+                    </p>
+                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                      {isBn
+                        ? 'রিয়েল-টাইমে অফলাইনে এসএমএস ও ওটিপি রিসিভ করার জন্য প্রয়োজন'
+                        : 'Required to receive and send real-time offline SMS & OTPs'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  id="activate-sms-role-inline-btn"
+                  onClick={() => {
+                    callPermissionService.setDefaultSms(true);
+                    setHasSmsRole(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] shadow-sm shrink-0 transition active:scale-95 cursor-pointer flex items-center gap-1"
+                >
+                  <Zap className="w-3 h-3" />
+                  <span>{isBn ? '১-ক্লিকে অন করুন' : 'Enable Now'}</span>
+                </button>
+              </div>
+            )}
 
             {/* Search Input */}
             <div className="relative">

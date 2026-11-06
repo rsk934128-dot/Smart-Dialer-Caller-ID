@@ -4,18 +4,48 @@ import { Language } from '../utils/i18n';
 import { callPermissionService } from '../services/callPermissionService';
 
 interface DefaultCallPermissionBannerProps {
-  isDefault: boolean;
+  isDefault?: boolean;
+  isDefaultSms?: boolean;
   onOpenModal: () => void;
   lang: Language;
 }
 
 export const DefaultCallPermissionBanner: React.FC<DefaultCallPermissionBannerProps> = ({
-  isDefault,
+  isDefault: propIsDefault,
+  isDefaultSms: propIsDefaultSms,
   onOpenModal,
   lang,
 }) => {
   const isBn = lang === 'bn';
-  const isDefaultSms = callPermissionService.isDefaultSms();
+  const [isDefault, setIsDefault] = React.useState<boolean>(
+    propIsDefault !== undefined ? propIsDefault : callPermissionService.isDefault()
+  );
+  const [isDefaultSms, setIsDefaultSms] = React.useState<boolean>(
+    propIsDefaultSms !== undefined ? propIsDefaultSms : callPermissionService.isDefaultSms()
+  );
+
+  React.useEffect(() => {
+    if (propIsDefault !== undefined) setIsDefault(propIsDefault);
+    if (propIsDefaultSms !== undefined) setIsDefaultSms(propIsDefaultSms);
+  }, [propIsDefault, propIsDefaultSms]);
+
+  React.useEffect(() => {
+    const unsub = callPermissionService.subscribe((_perms, defDialer, _mode, defSms) => {
+      setIsDefault(defDialer);
+      setIsDefaultSms(defSms);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleQuickActivateAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    callPermissionService.activateAllPermissions();
+  };
+
+  const handleQuickActivateSms = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    callPermissionService.setDefaultSms(true);
+  };
 
   if (isDefault && isDefaultSms) {
     return (
@@ -32,14 +62,16 @@ export const DefaultCallPermissionBanner: React.FC<DefaultCallPermissionBannerPr
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-bold text-emerald-900 dark:text-emerald-200 text-xs">
-                {isBn ? 'ডিফল্ট কলিং অ্যাপ অনুমোদিত ও সক্রিয়' : 'Default Calling App Authorized & Active'}
+                {isBn ? 'ডিফল্ট কল ও মেসেজ অ্যাপ সক্রিয়' : 'Default Call & SMS Roles Active'}
               </span>
               <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-emerald-200/70 dark:bg-emerald-800/60 text-emerald-800 dark:text-emerald-200 font-semibold font-mono">
-                ROLE_DIALER
+                ROLE_DIALER • ROLE_SMS
               </span>
             </div>
             <p className="text-[10.5px] text-neutral-600 dark:text-neutral-300 truncate">
-              {isBn ? 'রিয়েল সিম কল, কলার আইডি ওভারলে ও স্প্যাম প্রোটেকশন চালু রয়েছে' : 'Real SIM calling, Caller ID overlay & Spam protection active'}
+              {isBn
+                ? 'রিয়েল সিম কল, কলার আইডি ওভারলে ও অফলাইন মেসেজিং সক্রিয়'
+                : 'Real SIM calling, caller ID & offline messaging authorized'}
             </p>
           </div>
         </div>
@@ -56,31 +88,33 @@ export const DefaultCallPermissionBanner: React.FC<DefaultCallPermissionBannerPr
       <div
         id="default-sms-pending-banner"
         onClick={onOpenModal}
-        className="mx-3 my-2 px-3 py-1.5 rounded-xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800/60 flex items-center justify-between cursor-pointer hover:bg-blue-100/80 transition shadow-xs text-xs"
-        title={isBn ? 'Google মেসেজ পারমিশন অন করুন' : 'Enable Google Messages Permission'}
+        className="mx-3 my-2 p-2.5 rounded-2xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-800/60 flex items-center justify-between gap-2.5 cursor-pointer hover:bg-blue-100/80 transition shadow-xs text-xs"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-5 h-5 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
-            <MessageSquare className="w-3 h-3" />
+          <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+            <MessageSquare className="w-3.5 h-3.5" />
           </div>
           <div className="min-w-0">
-            <span className="font-bold text-blue-900 dark:text-blue-200 text-[11px] truncate block">
+            <span className="font-bold text-blue-900 dark:text-blue-200 text-xs truncate block">
               {isBn ? 'Google মেসেজ পারমিশন যুক্ত করুন' : 'Enable Google Messages Permission'}
             </span>
+            <p className="text-[10px] text-blue-700 dark:text-blue-300 truncate">
+              {isBn ? 'অফলাইনে রিয়েল-টাইমে এসএমএস ও ওটিপি রিসিভের অনুমতি দিন' : 'Authorize offline real-time SMS & OTP reception'}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-blue-700 dark:text-blue-300 font-semibold text-[10px] shrink-0">
+
+        <button
+          id="banner-activate-sms-btn"
+          onClick={handleQuickActivateSms}
+          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] shadow-sm shrink-0 flex items-center gap-1 transition active:scale-95"
+        >
+          <Zap className="w-3 h-3" />
           <span>{isBn ? 'অন করুন' : 'Enable'}</span>
-          <ChevronRight className="w-3 h-3" />
-        </div>
+        </button>
       </div>
     );
   }
-
-  const handleQuickActivate = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    callPermissionService.activateAllPermissions();
-  };
 
   return (
     <div
@@ -94,23 +128,23 @@ export const DefaultCallPermissionBanner: React.FC<DefaultCallPermissionBannerPr
         </div>
         <div className="min-w-0">
           <h4 className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate">
-            {isBn ? 'ডিফল্ট ফোন ও কলিং পারমিশন অনুমোদন করুন' : 'Authorize Default Phone & Calling App'}
+            {isBn ? 'ডিফল্ট কল ও মেসেজ পারমিশন সক্রিয় করুন' : 'Authorize Default Phone & SMS Roles'}
           </h4>
           <p className="text-[10px] text-neutral-600 dark:text-neutral-300 truncate">
             {isBn
-              ? 'ইনকামিং কল, কলার আইডি ও রিয়েল সিম কল চালু করার অনুমতি'
-              : 'Permission for incoming calls, caller ID & real SIM calling'}
+              ? 'ইনকামিং কল, কলার আইডি ওভারলে ও রিয়েল এসএমএস পারমিশন'
+              : 'Permission for incoming calls, caller ID & SMS features'}
           </p>
         </div>
       </div>
 
       <button
         id="banner-activate-default-btn"
-        onClick={handleQuickActivate}
+        onClick={handleQuickActivateAll}
         className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-sm shrink-0 flex items-center gap-1 transition active:scale-95"
       >
         <Zap className="w-3 h-3" />
-        <span>{isBn ? '১-ক্লিকে অনুমোদন দিন' : 'Authorize'}</span>
+        <span>{isBn ? '১-ক্লিকে সক্রিয় করুন' : 'Activate All'}</span>
       </button>
     </div>
   );

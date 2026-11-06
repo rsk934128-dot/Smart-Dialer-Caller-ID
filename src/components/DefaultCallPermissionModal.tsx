@@ -78,6 +78,7 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
   );
   const [micTesting, setMicTesting] = useState(false);
   const [micSuccess, setMicSuccess] = useState<boolean | null>(null);
+  const [systemRolePrompt, setSystemRolePrompt] = useState<'dialer' | 'sms' | null>(null);
 
   // Real call tester state
   const [testPhoneNumber, setTestPhoneNumber] = useState('+8801712345678');
@@ -115,30 +116,28 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
     showSavedFeedback();
   };
 
-  const handleSetAsDefaultRole = () => {
-    if (selectedSimDialer === 'smart_dialer') {
-      callPermissionService.setDefaultDialer(true);
-      setIsDefault(true);
-      setPermissions(callPermissionService.getPermissions());
-    } else {
-      callPermissionService.setDefaultDialer(false);
-      setIsDefault(false);
-      setPermissions(callPermissionService.getPermissions());
+  const handleSetAsDefaultRole = (showPrompt = true) => {
+    if (showPrompt) {
+      setSystemRolePrompt('dialer');
+      return;
     }
-    showSavedFeedback();
+    callPermissionService.setDefaultDialer(true);
+    setIsDefault(true);
+    setSelectedSimDialer('smart_dialer');
+    setPermissions(callPermissionService.getPermissions());
+    showSavedFeedback(isBn ? 'ডিফল্ট ফোন অ্যাপ (ROLE_DIALER) সফলভাবে সক্রিয় হয়েছে!' : 'Default Phone App Role granted successfully!');
   };
 
-  const handleSetAsDefaultSmsRole = () => {
-    if (selectedSmsApp === 'smart_dialer') {
-      callPermissionService.setDefaultSms(true);
-      setIsDefaultSms(true);
-      setPermissions(callPermissionService.getPermissions());
-    } else {
-      callPermissionService.setDefaultSms(false);
-      setIsDefaultSms(false);
-      setPermissions(callPermissionService.getPermissions());
+  const handleSetAsDefaultSmsRole = (showPrompt = true) => {
+    if (showPrompt) {
+      setSystemRolePrompt('sms');
+      return;
     }
-    showSavedFeedback();
+    callPermissionService.setDefaultSms(true);
+    setIsDefaultSms(true);
+    setSelectedSmsApp('smart_dialer');
+    setPermissions(callPermissionService.getPermissions());
+    showSavedFeedback(isBn ? 'ডিফল্ট মেসেজ অ্যাপ (ROLE_SMS) সফলভাবে সক্রিয় হয়েছে!' : 'Default SMS App Role granted successfully!');
   };
 
   const handleActivateAll = async () => {
@@ -152,15 +151,15 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
     setSelectedSmsApp('smart_dialer');
     setTimeout(() => {
       setIsActivatingAll(false);
-      showSavedFeedback();
-    }, 400);
+      showSavedFeedback(isBn ? 'সব পারমিশন ও ডিফল্ট রোল (কল + এসএমএস) সফলভাবে সক্রিয় হয়েছে!' : 'All Call & SMS Permissions granted successfully!');
+    }, 300);
   };
 
-  const showSavedFeedback = () => {
-    setSaveSuccessMsg(isBn ? 'সেটিংস সফলভাবে সেভ হয়েছে!' : 'Settings saved successfully!');
+  const showSavedFeedback = (customMsg?: string) => {
+    setSaveSuccessMsg(customMsg || (isBn ? 'সেটিংস সফলভাবে সেভ হয়েছে!' : 'Settings saved successfully!'));
     setTimeout(() => {
       setSaveSuccessMsg(null);
-    }, 2500);
+    }, 3000);
   };
 
   const handleTestMic = async () => {
@@ -309,6 +308,52 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
           {/* TAB 1: Android Role Dialog & Real Call Settings */}
           {activeTab === 'dialog' && (
             <div className="space-y-4">
+              {/* Master 1-Click Activate All Call & SMS Permissions Banner */}
+              <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-950/80 via-neutral-900 to-cyan-950/80 border-2 border-emerald-500/50 shadow-xl space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 text-neutral-950 flex items-center justify-center font-black shadow-md shrink-0">
+                      <Zap className="w-5 h-5 fill-current" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2 flex-wrap">
+                        <span>{isBn ? '১-ক্লিকে কল ও মেসেজ পারমিশন সক্রিয় করুন' : '1-Click Fix All Permissions'}</span>
+                        {isDefault && isDefaultSms ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold">
+                            উভয়ই সক্রিয় (ACTIVE)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold animate-pulse">
+                            অনুমোদন প্রয়োজন
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-[11px] text-neutral-300 leading-relaxed">
+                        {isBn
+                          ? 'ডিফল্ট ফোন অ্যাপ (ROLE_DIALER) ও মেসেজ পারমিশন (ROLE_SMS) উভয়ই একসাথে অন করুন।'
+                          : 'Activate both Default Phone & SMS Roles with full real SIM dialing and offline SMS reception.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    id="modal-master-activate-both-btn"
+                    onClick={handleActivateAll}
+                    disabled={isActivatingAll}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 active:scale-98 text-neutral-950 font-bold text-xs shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Zap className="w-4 h-4 fill-current" />
+                    <span>
+                      {isActivatingAll
+                        ? (isBn ? 'সক্রিয় করা হচ্ছে...' : 'Activating...')
+                        : (isBn ? 'কল ও মেসেজ উভয় পারমিশন এখনই অন করুন' : 'Activate Both Call & Message Roles Now')}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               {/* Call Mode Switcher Card */}
               <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700/80 p-3.5 bg-gradient-to-br from-emerald-50/50 to-teal-50/30 dark:from-emerald-950/20 dark:to-teal-950/20 shadow-xs space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -502,14 +547,38 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
                 {/* Set as Default Action button */}
                 <div className="flex gap-2 pt-2">
                   <button
+                    id="save-default-dialer-role-btn"
                     onClick={() => {
                       setSelectedSimDialer('smart_dialer');
-                      handleSetAsDefaultRole();
+                      handleSetAsDefaultRole(true);
                     }}
-                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5"
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>{isBn ? 'ডিফল্ট ফোন অ্যাপ সংরক্ষণ করুন' : 'Save as Default Phone App'}</span>
+                    <span>{isBn ? 'ডিফল্ট ফোন অ্যাপ হিসেবে সেট করুন (ROLE_DIALER)' : 'Set as Default Phone App'}</span>
+                  </button>
+                  <button
+                    id="quick-toggle-dialer-btn"
+                    type="button"
+                    onClick={() => {
+                      const next = !isDefault;
+                      callPermissionService.setDefaultDialer(next);
+                      setIsDefault(next);
+                      setSelectedSimDialer('smart_dialer');
+                      setPermissions(callPermissionService.getPermissions());
+                      showSavedFeedback(
+                        next
+                          ? (isBn ? 'ডিফল্ট ডায়ালার সফলভাবে অন করা হয়েছে!' : 'Default Dialer activated!')
+                          : (isBn ? 'ডিফল্ট ডায়ালার নিষ্ক্রিয় করা হয়েছে' : 'Default Dialer deactivated')
+                      );
+                    }}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                      isDefault
+                        ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-300 dark:border-neutral-700 hover:bg-neutral-200'
+                        : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 border-emerald-400 hover:bg-emerald-200'
+                    }`}
+                  >
+                    {isDefault ? (isBn ? 'বন্ধ করুন' : 'Deactivate') : (isBn ? 'সরাসরি অন' : 'Quick Enable')}
                   </button>
                 </div>
               </div>
@@ -613,17 +682,42 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
                   </label>
                 </div>
 
-                <button
-                  id="save-default-sms-role-btn"
-                  onClick={() => {
-                    setSelectedSmsApp('smart_dialer');
-                    handleSetAsDefaultSmsRole();
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{isBn ? 'Google মেসেজকে ডিফল্ট অ্যাপ করুন' : 'Set as Default SMS App'}</span>
-                </button>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    id="save-default-sms-role-btn"
+                    onClick={() => {
+                      setSelectedSmsApp('smart_dialer');
+                      handleSetAsDefaultSmsRole(true);
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isBn ? 'Google মেসেজকে ডিফল্ট অ্যাপ করুন (ROLE_SMS)' : 'Set as Default SMS App'}</span>
+                  </button>
+                  <button
+                    id="quick-toggle-sms-btn"
+                    type="button"
+                    onClick={() => {
+                      const next = !isDefaultSms;
+                      callPermissionService.setDefaultSms(next);
+                      setIsDefaultSms(next);
+                      setSelectedSmsApp('smart_dialer');
+                      setPermissions(callPermissionService.getPermissions());
+                      showSavedFeedback(
+                        next
+                          ? (isBn ? 'ডিফল্ট মেসেজ অ্যাপ সফলভাবে অন করা হয়েছে!' : 'Default SMS activated!')
+                          : (isBn ? 'ডিফল্ট মেসেজ অ্যাপ নিষ্ক্রিয় করা হয়েছে' : 'Default SMS deactivated')
+                      );
+                    }}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                      isDefaultSms
+                        ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-300 dark:border-neutral-700 hover:bg-neutral-200'
+                        : 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-200 border-blue-400 hover:bg-blue-200'
+                    }`}
+                  >
+                    {isDefaultSms ? (isBn ? 'বন্ধ করুন' : 'Deactivate') : (isBn ? 'সরাসরি অন' : 'Quick Enable')}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1278,6 +1372,108 @@ startActivity(callIntent)`}
             </button>
           )}
         </div>
+
+        {/* ================= SIMULATED ANDROID 14 SYSTEM ROLE PROMPT MODAL ================= */}
+        {systemRolePrompt && (
+          <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-white dark:bg-neutral-900 rounded-3xl p-5 shadow-2xl border border-neutral-200 dark:border-neutral-800 space-y-4 animate-in fade-in zoom-in-95">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-sm">
+                {systemRolePrompt === 'dialer' ? (
+                  <PhoneCall className="w-6 h-6" />
+                ) : (
+                  <MessageSquare className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                )}
+              </div>
+
+              <div className="text-center space-y-1.5">
+                <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
+                  {systemRolePrompt === 'dialer'
+                    ? (isBn ? 'Smart Dialer-কে ডিফল্ট ফোন অ্যাপ করবেন?' : 'Set Smart Dialer as default phone app?')
+                    : (isBn ? 'Smart Messages-কে ডিফল্ট মেসেজ অ্যাপ করবেন?' : 'Set Smart Messages as default SMS app?')}
+                </h3>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                  {systemRolePrompt === 'dialer'
+                    ? (isBn
+                        ? 'স্মার্ট ডায়ালারকে প্রধান ডায়ালার হিসেবে নির্ধারণ করলে এটি ইনকামিং ও আউটগোয়িং কল, কলার আইডি এবং স্প্যাম ব্লকিং পরিচালনা করবে।'
+                        : 'Smart Dialer will manage all incoming/outgoing phone calls, caller ID popup, and spam call filtering.')
+                    : (isBn
+                        ? 'স্মার্ট মেসেজকে প্রধান মেসেজিং অ্যাপ নির্ধারণ করলে এটি অফলাইনে রিয়েল-টাইমে এসএমএস, ওটিপি ও মেসেজ থ্রেড পরিচালনা করবে।'
+                        : 'Smart Messages will handle real-time offline SMS, OTP verification copy, and safe spam filtering.')}
+                </p>
+                <code className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono block pt-0.5">
+                  {systemRolePrompt === 'dialer'
+                    ? 'RoleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)'
+                    : 'RoleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)'}
+                </code>
+              </div>
+
+              {/* Role Radio Options Mock */}
+              <div className="space-y-2 pt-1">
+                <div className="p-3 rounded-2xl border-2 border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src="/app-logo.png"
+                      alt=""
+                      className="w-9 h-9 rounded-xl object-cover border border-emerald-500 shadow-xs"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div>
+                      <p className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
+                        {systemRolePrompt === 'dialer' ? 'Smart Dialer & Caller ID' : 'Smart Dialer & Messages'}
+                      </p>
+                      <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">
+                        {systemRolePrompt === 'dialer' ? 'Full Telecom & Spam Shield' : 'Offline SMS & OTP copy'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-white">
+                    <Check className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/40 flex items-center justify-between opacity-60">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-neutral-300 dark:bg-neutral-700 flex items-center justify-center text-neutral-700 dark:text-neutral-300">
+                      {systemRolePrompt === 'dialer' ? <PhoneCall className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                        {systemRolePrompt === 'dialer' ? 'Phone' : 'Messages'}
+                      </p>
+                      <p className="text-[10px] text-neutral-400">Android System Default</p>
+                    </div>
+                  </div>
+                  <div className="w-5 h-5 rounded-full border-2 border-neutral-400" />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-2">
+                <button
+                  id="modal-confirm-system-role-btn"
+                  onClick={() => {
+                    if (systemRolePrompt === 'dialer') {
+                      handleSetAsDefaultRole(false);
+                    } else {
+                      handleSetAsDefaultSmsRole(false);
+                    }
+                    setSystemRolePrompt(null);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition cursor-pointer"
+                >
+                  {isBn ? 'Set as default (ডিফল্ট হিসেবে নির্ধারণ করুন)' : 'Set as default'}
+                </button>
+                <button
+                  id="modal-cancel-system-role-btn"
+                  onClick={() => setSystemRolePrompt(null)}
+                  className="w-full py-2 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-semibold hover:bg-neutral-200 dark:hover:bg-neutral-700 transition cursor-pointer"
+                >
+                  {isBn ? 'Cancel (বাতিল)' : 'Cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
