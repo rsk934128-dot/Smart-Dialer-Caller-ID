@@ -1,12 +1,13 @@
 import React from 'react';
 import { ShieldCheck, ShieldAlert, Zap, ChevronRight, CheckCircle2, MessageSquare } from 'lucide-react';
 import { Language } from '../utils/i18n';
-import { callPermissionService } from '../services/callPermissionService';
+import { callPermissionService, RoleManager } from '../services/callPermissionService';
 
 interface DefaultCallPermissionBannerProps {
   isDefault?: boolean;
   isDefaultSms?: boolean;
   onOpenModal: () => void;
+  onOpenGuide?: (role: 'dialer' | 'sms') => void;
   lang: Language;
 }
 
@@ -14,6 +15,7 @@ export const DefaultCallPermissionBanner: React.FC<DefaultCallPermissionBannerPr
   isDefault: propIsDefault,
   isDefaultSms: propIsDefaultSms,
   onOpenModal,
+  onOpenGuide,
   lang,
 }) => {
   const isBn = lang === 'bn';
@@ -44,7 +46,7 @@ export const DefaultCallPermissionBanner: React.FC<DefaultCallPermissionBannerPr
 
   const handleQuickActivateSms = (e: React.MouseEvent) => {
     e.stopPropagation();
-    callPermissionService.setDefaultSms(true);
+    callPermissionService.requestRole(RoleManager.ROLE_SMS);
   };
 
   if (isDefault && isDefaultSms) {
@@ -104,14 +106,27 @@ export const DefaultCallPermissionBanner: React.FC<DefaultCallPermissionBannerPr
           </div>
         </div>
 
-        <button
-          id="banner-activate-sms-btn"
-          onClick={handleQuickActivateSms}
-          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] shadow-sm shrink-0 flex items-center gap-1 transition active:scale-95"
-        >
-          <Zap className="w-3 h-3" />
-          <span>{isBn ? 'অন করুন' : 'Enable'}</span>
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {onOpenGuide && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenGuide('sms');
+              }}
+              className="px-2 py-1 rounded-xl bg-blue-100 dark:bg-blue-900/60 hover:bg-blue-200 dark:hover:bg-blue-800/60 text-blue-900 dark:text-blue-200 font-bold text-[10px] shrink-0 transition"
+            >
+              {isBn ? 'কেন দরকার?' : 'Why?'}
+            </button>
+          )}
+          <button
+            id="banner-activate-sms-btn"
+            onClick={handleQuickActivateSms}
+            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] shadow-sm shrink-0 flex items-center gap-1 transition active:scale-95 cursor-pointer"
+          >
+            <Zap className="w-3 h-3" />
+            <span>{isBn ? 'অন করুন' : 'Enable'}</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -138,14 +153,27 @@ export const DefaultCallPermissionBanner: React.FC<DefaultCallPermissionBannerPr
         </div>
       </div>
 
-      <button
-        id="banner-activate-default-btn"
-        onClick={handleQuickActivateAll}
-        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-sm shrink-0 flex items-center gap-1 transition active:scale-95"
-      >
-        <Zap className="w-3 h-3" />
-        <span>{isBn ? '১-ক্লিকে সক্রিয় করুন' : 'Activate All'}</span>
-      </button>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {onOpenGuide && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenGuide('dialer');
+            }}
+            className="px-2 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold text-[10px] border border-slate-700/60 shrink-0 transition cursor-pointer"
+          >
+            {isBn ? 'গাইড' : 'Guide'}
+          </button>
+        )}
+        <button
+          id="banner-activate-default-btn"
+          onClick={handleQuickActivateAll}
+          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-sm shrink-0 flex items-center gap-1 transition active:scale-95 cursor-pointer"
+        >
+          <Zap className="w-3 h-3" />
+          <span>{isBn ? '১-ক্লিকে সক্রিয়' : 'Activate All'}</span>
+        </button>
+      </div>
     </div>
   );
 };

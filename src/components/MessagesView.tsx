@@ -26,7 +26,7 @@ import {
 import { SmsMessage, SmsThread, Contact, SmsCategory } from '../types';
 import { smsService } from '../services/smsService';
 import { roomDbService } from '../db/roomDatabaseService';
-import { callPermissionService } from '../services/callPermissionService';
+import { callPermissionService, RoleManager } from '../services/callPermissionService';
 import { Language, TRANSLATIONS } from '../utils/i18n';
 import { classifySms } from '../utils/smsClassifier';
 
@@ -35,6 +35,7 @@ interface MessagesViewProps {
   contacts: Contact[];
   onInitiateCall: (phone: string, name: string) => void;
   onOpenPermissionModal: () => void;
+  onOpenGuide?: (role: 'sms') => void;
   initialThreadPhone?: string | null;
 }
 
@@ -45,6 +46,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   contacts,
   onInitiateCall,
   onOpenPermissionModal,
+  onOpenGuide,
   initialThreadPhone,
 }) => {
   const isBn = lang === 'bn';
@@ -659,17 +661,27 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   </div>
                 </div>
 
-                <button
-                  id="activate-sms-role-inline-btn"
-                  onClick={() => {
-                    callPermissionService.setDefaultSms(true);
-                    setHasSmsRole(true);
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] shadow-sm shrink-0 transition active:scale-95 cursor-pointer flex items-center gap-1"
-                >
-                  <Zap className="w-3 h-3" />
-                  <span>{isBn ? '১-ক্লিকে অন করুন' : 'Enable Now'}</span>
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {onOpenGuide && (
+                    <button
+                      onClick={() => onOpenGuide('sms')}
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition cursor-pointer"
+                    >
+                      {isBn ? 'কেন দরকার?' : 'Why Needed?'}
+                    </button>
+                  )}
+                  <button
+                    id="activate-sms-role-inline-btn"
+                    onClick={async () => {
+                      await callPermissionService.requestRole(RoleManager.ROLE_SMS);
+                      setHasSmsRole(callPermissionService.isDefaultSms());
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] shadow-sm shrink-0 transition active:scale-95 cursor-pointer flex items-center gap-1"
+                  >
+                    <Zap className="w-3 h-3" />
+                    <span>{isBn ? '১-ক্লিকে অন করুন' : 'Enable Now'}</span>
+                  </button>
+                </div>
               </div>
             )}
 

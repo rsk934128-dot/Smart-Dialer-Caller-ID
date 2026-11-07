@@ -23,6 +23,7 @@ import {
   Cpu,
   Copy,
   Radio,
+  Info,
   ExternalLink,
   Settings as SettingsIcon,
   Code2,
@@ -37,6 +38,7 @@ import {
   callPermissionService,
   CallPermissions,
   CallMode,
+  RoleManager,
 } from '../services/callPermissionService';
 import { CallerIdRecord } from '../types';
 import { BackupSyncView } from './BackupSyncView';
@@ -48,6 +50,7 @@ interface DefaultCallPermissionModalProps {
   onSimulateIncoming?: (caller: CallerIdRecord, mode?: 'fullscreen' | 'overlay') => void;
   initialTab?: 'dialog' | 'permissions' | 'settings' | 'backup' | 'code';
   onOpenAuth?: () => void;
+  onOpenGuide?: (role: 'dialer' | 'sms' | 'screening' | 'overlay') => void;
 }
 
 export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProps> = ({
@@ -57,6 +60,7 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
   onSimulateIncoming,
   initialTab,
   onOpenAuth,
+  onOpenGuide,
 }) => {
   const [permissions, setPermissions] = useState<CallPermissions>(() =>
     callPermissionService.getPermissions()
@@ -116,28 +120,28 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
     showSavedFeedback();
   };
 
-  const handleSetAsDefaultRole = (showPrompt = true) => {
+  const handleSetAsDefaultRole = async (showPrompt = true) => {
     if (showPrompt) {
       setSystemRolePrompt('dialer');
       return;
     }
-    callPermissionService.setDefaultDialer(true);
-    setIsDefault(true);
+    await callPermissionService.requestRole(RoleManager.ROLE_DIALER);
+    setIsDefault(callPermissionService.isDefault());
     setSelectedSimDialer('smart_dialer');
     setPermissions(callPermissionService.getPermissions());
-    showSavedFeedback(isBn ? 'ডিফল্ট ফোন অ্যাপ (ROLE_DIALER) সফলভাবে সক্রিয় হয়েছে!' : 'Default Phone App Role granted successfully!');
+    showSavedFeedback(isBn ? 'ডিফল্ট ফোন অ্যাপ (ROLE_DIALER) সফলভাবে সক্রিয় হয়েছে!' : 'Default Phone App Role (ROLE_DIALER) granted successfully!');
   };
 
-  const handleSetAsDefaultSmsRole = (showPrompt = true) => {
+  const handleSetAsDefaultSmsRole = async (showPrompt = true) => {
     if (showPrompt) {
       setSystemRolePrompt('sms');
       return;
     }
-    callPermissionService.setDefaultSms(true);
-    setIsDefaultSms(true);
+    await callPermissionService.requestRole(RoleManager.ROLE_SMS);
+    setIsDefaultSms(callPermissionService.isDefaultSms());
     setSelectedSmsApp('smart_dialer');
     setPermissions(callPermissionService.getPermissions());
-    showSavedFeedback(isBn ? 'ডিফল্ট মেসেজ অ্যাপ (ROLE_SMS) সফলভাবে সক্রিয় হয়েছে!' : 'Default SMS App Role granted successfully!');
+    showSavedFeedback(isBn ? 'ডিফল্ট মেসেজ অ্যাপ (ROLE_SMS) সফলভাবে সক্রিয় হয়েছে!' : 'Default SMS App Role (ROLE_SMS) granted successfully!');
   };
 
   const handleActivateAll = async () => {
@@ -337,7 +341,7 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                   <button
                     id="modal-master-activate-both-btn"
                     onClick={handleActivateAll}
@@ -348,9 +352,19 @@ export const DefaultCallPermissionModal: React.FC<DefaultCallPermissionModalProp
                     <span>
                       {isActivatingAll
                         ? (isBn ? 'সক্রিয় করা হচ্ছে...' : 'Activating...')
-                        : (isBn ? 'কল ও মেসেজ উভয় পারমিশন এখনই অন করুন' : 'Activate Both Call & Message Roles Now')}
+                        : (isBn ? 'কল ও মেসেজ উভয় পারমিশন অন করুন' : 'Activate Both Call & Message Roles Now')}
                     </span>
                   </button>
+
+                  {onOpenGuide && (
+                    <button
+                      onClick={() => onOpenGuide('dialer')}
+                      className="py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shrink-0"
+                    >
+                      <Info className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{isBn ? 'কেন দরকার? গাইড' : 'Why Needed? Guide'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

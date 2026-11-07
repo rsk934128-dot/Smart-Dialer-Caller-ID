@@ -53,6 +53,57 @@ const DEFAULT_STATE: CallPermissions = {
   autostart: true,
 };
 
+export type AndroidRole =
+  | 'ROLE_DIALER'
+  | 'ROLE_SMS'
+  | 'dialer'
+  | 'sms'
+  | 'android.app.role.DIALER'
+  | 'android.app.role.SMS'
+  | 'ROLE_CALL_SCREENING'
+  | 'call_screening';
+
+/**
+ * Android 10+ (API 29+) RoleManager programmatic API.
+ * Encapsulates RoleManager.ROLE_DIALER and RoleManager.ROLE_SMS constants
+ * and programmatic requests and checks.
+ */
+export const RoleManager = {
+  ROLE_DIALER: 'android.app.role.DIALER' as const,
+  ROLE_SMS: 'android.app.role.SMS' as const,
+  ROLE_CALL_SCREENING: 'android.app.role.CALL_SCREENING' as const,
+  ROLE_CALL_REDIRECTION: 'android.app.role.CALL_REDIRECTION' as const,
+
+  // Short aliases for convenience
+  DIALER: 'android.app.role.DIALER' as const,
+  SMS: 'android.app.role.SMS' as const,
+
+  /**
+   * Programmatically requests a role on Android 10+ devices
+   */
+  requestRole: (role: AndroidRole) => callPermissionService.requestRole(role),
+
+  /**
+   * Programmatically checks whether a role is held by Smart Dialer
+   */
+  isRoleHeld: (role: AndroidRole) => callPermissionService.isRoleHeld(role),
+
+  /**
+   * Programmatically checks whether a role is available on this device
+   */
+  isRoleAvailable: (role: AndroidRole) => callPermissionService.isRoleAvailable(role),
+
+  /**
+   * Directly opens OS Default Apps settings
+   */
+  openDefaultAppsSettings: () => callPermissionService.openDefaultAppsSettings(),
+
+  /**
+   * Directly opens OS App Details / Permissions settings
+   */
+  openAppSettings: () => callPermissionService.openAppSettings(),
+} as const;
+
 type Listener = (
   permissions: CallPermissions,
   isDefault: boolean,
@@ -66,6 +117,7 @@ class CallPermissionService {
   private isDefaultSmsRole: boolean;
   private callMode: CallMode;
   private listeners: Set<Listener> = new Set();
+  private pendingRoleResolvers: Map<string, Array<(granted: boolean) => void>> = new Map();
 
   constructor() {
     this.permissions = this.loadPermissions();
@@ -73,11 +125,57 @@ class CallPermissionService {
     this.isDefaultSmsRole = this.loadDefaultSmsStatus();
     this.callMode = this.loadCallMode();
 
-    // In native Android APK, query real OS system role status on boot
     if (typeof window !== 'undefined') {
+      // 1. Initial sync with Android OS RoleManager
       setTimeout(() => {
         this.refreshSystemRoleStatus().catch(() => {});
       }, 300);
+
+      // 2. Listen for onActivityResult callback events dispatched from MainActivity.java
+      window.addEventListener('smart_dialer_role_result', ((e: CustomEvent) => {
+        const detail = e.detail;
+        if (!detail) return;
+        const normalized = this.normalizeRole(detail.role);
+        const granted = Boolean(detail.granted);
+
+        if (normalized === 'ROLE_DIALER') {
+          this.isDefaultDialer = granted;
+          this.permissions.roleDialer = granted;
+          if (granted) {
+            this.permissions.callPhone = true;
+            this.permissions.roleCallScreening = true;
+            this.permissions.readPhoneState = true;
+            this.permissions.readCallLog = true;
+            this.permissions.writeCallLog = true;
+          }
+          this.save();
+        } else if (normalized === 'ROLE_SMS') {
+          this.isDefaultSmsRole = granted;
+          this.permissions.roleSms = granted;
+          if (granted) {
+            this.permissions.receiveSms = true;
+            this.permissions.readSms = true;
+            this.permissions.sendSms = true;
+            this.permissions.receiveMms = true;
+          }
+          this.save();
+        }
+
+        // Resolve any awaiting promises
+        const resolvers = this.pendingRoleResolvers.get(normalized) || [];
+        resolvers.forEach((res) => res(granted));
+        this.pendingRoleResolvers.delete(normalized);
+      }) as EventListener);
+
+      // 3. Whenever user returns to the app from system role dialog, refresh state
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.refreshSystemRoleStatus().catch(() => {});
+        }
+      });
+      window.addEventListener('focus', () => {
+        this.refreshSystemRoleStatus().catch(() => {});
+      });
     }
   }
 
@@ -299,15 +397,179 @@ class CallPermissionService {
   }
 
   /**
-   * Dispatches native Android Intent or notifies Android WebView when in APK
+   * Normalizes role string to canonical Android RoleManager constants
    */
-  public dispatchAndroidRoleIntent(role: 'dialer' | 'sms', active: boolean) {
+  public normalizeRole(role: string): 'ROLE_DIALER' | 'ROLE_SMS' | 'ROLE_CALL_SCREENING' | string {
+    if (!role) return 'ROLE_DIALER';
+    const clean = role.trim();
+    if (clean === 'dialer' || clean.toUpperCase() === 'ROLE_DIALER' || clean === 'android.app.role.DIALER') {
+      return 'ROLE_DIALER';
+    }
+    if (clean === 'sms' || clean.toUpperCase() === 'ROLE_SMS' || clean === 'android.app.role.SMS') {
+      return 'ROLE_SMS';
+    }
+    if (clean === 'call_screening' || clean.toUpperCase() === 'ROLE_CALL_SCREENING' || clean === 'android.app.role.CALL_SCREENING') {
+      return 'ROLE_CALL_SCREENING';
+    }
+    return clean;
+  }
+
+  /**
+   * Checks whether the given role is actively held by Smart Dialer in Android OS
+   */
+  public async isRoleHeld(role: AndroidRole): Promise<boolean> {
+    const normalized = this.normalizeRole(role);
+    if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+      try {
+        if (typeof (window as any).AndroidBridge.isRoleHeld === 'function') {
+          return Boolean((window as any).AndroidBridge.isRoleHeld(normalized));
+        }
+        if (normalized === 'ROLE_DIALER' && typeof (window as any).AndroidBridge.isDefaultDialer === 'function') {
+          return Boolean((window as any).AndroidBridge.isDefaultDialer());
+        }
+        if (normalized === 'ROLE_SMS' && typeof (window as any).AndroidBridge.isDefaultSms === 'function') {
+          return Boolean((window as any).AndroidBridge.isDefaultSms());
+        }
+      } catch (err) {
+        console.warn('Error querying isRoleHeld from AndroidBridge:', err);
+      }
+    }
+    return normalized === 'ROLE_DIALER' ? this.isDefault() : this.isDefaultSms();
+  }
+
+  /**
+   * Checks whether the given role is available on this Android device (Android 10+ / API 29+)
+   */
+  public async isRoleAvailable(role: AndroidRole): Promise<boolean> {
+    const normalized = this.normalizeRole(role);
+    if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+      try {
+        if (typeof (window as any).AndroidBridge.isRoleAvailable === 'function') {
+          return Boolean((window as any).AndroidBridge.isRoleAvailable(normalized));
+        }
+      } catch (err) {
+        console.warn('Error querying isRoleAvailable from AndroidBridge:', err);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Specifically requests 'ROLE_DIALER' or 'ROLE_SMS' with RoleManager API on Android 10+
+   * Returns a promise that resolves when the system dialog completes.
+   */
+  public async requestRole(role: AndroidRole): Promise<boolean> {
+    const normalized = this.normalizeRole(role);
+    const isDialer = normalized === 'ROLE_DIALER';
+    const isSms = normalized === 'ROLE_SMS';
+
+    // If already held in native OS, immediately activate permissions and return true
+    const alreadyHeld = await this.isRoleHeld(role);
+    if (alreadyHeld) {
+      if (isDialer) {
+        this.setDefaultDialer(true);
+      } else if (isSms) {
+        this.setDefaultSms(true);
+      }
+      return true;
+    }
+
+    return new Promise<boolean>((resolve) => {
+      // 1. Register pending resolver for onActivityResult callback from AndroidBridge
+      if (!this.pendingRoleResolvers.has(normalized)) {
+        this.pendingRoleResolvers.set(normalized, []);
+      }
+      this.pendingRoleResolvers.get(normalized)!.push(resolve);
+
+      // 2. Timeout safeguard (5 seconds) to ensure promise settles even if user ignores system prompt
+      setTimeout(async () => {
+        const heldNow = await this.isRoleHeld(role);
+        resolve(heldNow);
+      }, 5000);
+
+      // 3. Dispatch native Android role intent
+      this.dispatchAndroidRoleIntent(role, true);
+    });
+  }
+
+  /**
+   * Programmatically requests RoleManager.ROLE_DIALER on Android 10+
+   */
+  public async requestDefaultDialerRole(): Promise<boolean> {
+    return this.requestRole(RoleManager.ROLE_DIALER);
+  }
+
+  /**
+   * Programmatically requests RoleManager.ROLE_SMS on Android 10+
+   */
+  public async requestDefaultSmsRole(): Promise<boolean> {
+    return this.requestRole(RoleManager.ROLE_SMS);
+  }
+
+  /**
+   * Programmatically checks whether RoleManager.ROLE_DIALER is currently held
+   */
+  public async checkDefaultDialerStatus(): Promise<boolean> {
+    return this.isRoleHeld(RoleManager.ROLE_DIALER);
+  }
+
+  /**
+   * Programmatically checks whether RoleManager.ROLE_SMS is currently held
+   */
+  public async checkDefaultSmsStatus(): Promise<boolean> {
+    return this.isRoleHeld(RoleManager.ROLE_SMS);
+  }
+
+  /**
+   * Directly opens the Android OS Default Apps management screen
+   */
+  public openDefaultAppsSettings() {
     if (typeof window === 'undefined') return;
+    try {
+      if ((window as any).AndroidBridge?.openDefaultAppsSettings) {
+        (window as any).AndroidBridge.openDefaultAppsSettings();
+        return;
+      }
+      if ((window as any).Capacitor?.isNativePlatform?.()) {
+        window.open('intent:#Intent;action=android.settings.MANAGE_DEFAULT_APPS_SETTINGS;end', '_system');
+      }
+    } catch (e) {
+      this.openAppSettings();
+    }
+  }
+
+  /**
+   * Directly opens the Android OS App Details / Permissions screen for Smart Dialer
+   */
+  public openAppSettings() {
+    if (typeof window === 'undefined') return;
+    try {
+      if ((window as any).AndroidBridge?.openAppDetailsSettings) {
+        (window as any).AndroidBridge.openAppDetailsSettings();
+        return;
+      }
+      if ((window as any).Capacitor?.isNativePlatform?.()) {
+        window.open('intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;package=com.smartdialer.telecom;end', '_system');
+      }
+    } catch (e) {
+      console.warn('Cannot open app details settings:', e);
+    }
+  }
+
+  /**
+   * Dispatches native Android Intent or notifies Android WebView when in APK
+   * Implements robust RoleManager checks for Android 10+ and legacy fallbacks.
+   */
+  public dispatchAndroidRoleIntent(role: AndroidRole, active: boolean) {
+    if (typeof window === 'undefined') return;
+    const normalized = this.normalizeRole(role);
+    const isDialer = normalized === 'ROLE_DIALER';
 
     window.dispatchEvent(
       new CustomEvent('smart_dialer_role_change', {
         detail: {
-          role,
+          role: isDialer ? 'dialer' : 'sms',
+          androidRole: normalized,
           active,
           timestamp: Date.now(),
         },
@@ -322,19 +584,27 @@ class CallPermissionService {
     }
 
     try {
-      // 1. First priority: Direct AndroidBridge JavascriptInterface injected in MainActivity.java
+      // 1. Primary path: Direct AndroidBridge JavascriptInterface injected in MainActivity.java
       if ((window as any).AndroidBridge?.requestRole) {
-        (window as any).AndroidBridge.requestRole(role);
+        (window as any).AndroidBridge.requestRole(normalized);
         return;
       }
 
-      // 2. Second priority: Capacitor Native Intent handler with exact action & extra parameters
+      // 2. Secondary path: Capacitor Native Intent handler with Android 10+ RoleManager action
       if ((window as any).Capacitor?.isNativePlatform?.()) {
-        const intentUrl =
-          role === 'dialer'
-            ? 'intent:#Intent;action=android.telecom.action.CHANGE_DEFAULT_DIALER;S.android.telecom.extra.CHANGE_DEFAULT_DIALER_PACKAGE_NAME=com.smartdialer.telecom;package=com.smartdialer.telecom;end'
-            : 'intent:#Intent;action=android.provider.Telephony.ACTION_CHANGE_DEFAULT;S.package=com.smartdialer.telecom;package=com.smartdialer.telecom;end';
-        window.open(intentUrl, '_system');
+        const roleManagerIntentUrl = isDialer
+          ? 'intent:#Intent;action=android.app.role.action.REQUEST_ROLE;S.android.app.role.extra.ROLE_NAME=android.app.role.DIALER;package=com.smartdialer.telecom;end'
+          : 'intent:#Intent;action=android.app.role.action.REQUEST_ROLE;S.android.app.role.extra.ROLE_NAME=android.app.role.SMS;package=com.smartdialer.telecom;end';
+
+        const legacyIntentUrl = isDialer
+          ? 'intent:#Intent;action=android.telecom.action.CHANGE_DEFAULT_DIALER;S.android.telecom.extra.CHANGE_DEFAULT_DIALER_PACKAGE_NAME=com.smartdialer.telecom;package=com.smartdialer.telecom;end'
+          : 'intent:#Intent;action=android.provider.Telephony.ACTION_CHANGE_DEFAULT;S.package=com.smartdialer.telecom;package=com.smartdialer.telecom;end';
+
+        try {
+          window.open(roleManagerIntentUrl, '_system');
+        } catch {
+          window.open(legacyIntentUrl, '_system');
+        }
       }
     } catch (e) {
       console.warn('Native role intent notice:', e);
@@ -350,11 +620,16 @@ class CallPermissionService {
 
     if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
       try {
-        if (typeof (window as any).AndroidBridge.isDefaultDialer === 'function') {
-          nativeDialer = Boolean((window as any).AndroidBridge.isDefaultDialer());
-        }
-        if (typeof (window as any).AndroidBridge.isDefaultSms === 'function') {
-          nativeSms = Boolean((window as any).AndroidBridge.isDefaultSms());
+        if (typeof (window as any).AndroidBridge.isRoleHeld === 'function') {
+          nativeDialer = Boolean((window as any).AndroidBridge.isRoleHeld('ROLE_DIALER'));
+          nativeSms = Boolean((window as any).AndroidBridge.isRoleHeld('ROLE_SMS'));
+        } else {
+          if (typeof (window as any).AndroidBridge.isDefaultDialer === 'function') {
+            nativeDialer = Boolean((window as any).AndroidBridge.isDefaultDialer());
+          }
+          if (typeof (window as any).AndroidBridge.isDefaultSms === 'function') {
+            nativeSms = Boolean((window as any).AndroidBridge.isDefaultSms());
+          }
         }
         this.isDefaultDialer = nativeDialer;
         this.permissions.roleDialer = nativeDialer;

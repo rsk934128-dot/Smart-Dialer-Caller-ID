@@ -48,6 +48,7 @@ import { AuthModal } from './components/AuthModal';
 import { cloudSyncService, CloudSyncStatus } from './services/cloudSyncService';
 import { DefaultCallPermissionModal } from './components/DefaultCallPermissionModal';
 import { DefaultCallPermissionBanner } from './components/DefaultCallPermissionBanner';
+import { PermissionGuideModal } from './components/PermissionGuideModal';
 import { MessagesView } from './components/MessagesView';
 import { IncomingSmsBanner } from './components/IncomingSmsBanner';
 import { FintechSecurityDashboard } from './components/FintechSecurityDashboard';
@@ -92,6 +93,19 @@ export default function App() {
   ) => {
     setPermissionModalTab(tab);
     setIsPermissionModalOpen(true);
+  };
+
+  // Permission & Role Guide Modal State
+  const [isPermissionGuideOpen, setIsPermissionGuideOpen] = useState<boolean>(false);
+  const [permissionGuideInitialRole, setPermissionGuideInitialRole] = useState<
+    'dialer' | 'sms' | 'screening' | 'overlay'
+  >('dialer');
+
+  const handleOpenPermissionGuide = (
+    role: 'dialer' | 'sms' | 'screening' | 'overlay' = 'dialer'
+  ) => {
+    setPermissionGuideInitialRole(role);
+    setIsPermissionGuideOpen(true);
   };
 
   // Tab & Navigation State
@@ -766,6 +780,7 @@ export default function App() {
           isDefault={isDefaultDialer}
           isDefaultSms={isDefaultSms}
           onOpenModal={() => setIsPermissionModalOpen(true)}
+          onOpenGuide={handleOpenPermissionGuide}
           lang={lang}
         />
 
@@ -855,6 +870,7 @@ export default function App() {
               contacts={contacts}
               onInitiateCall={handleInitiateCall}
               onOpenPermissionModal={() => setIsPermissionModalOpen(true)}
+              onOpenGuide={handleOpenPermissionGuide}
               initialThreadPhone={activeSmsThreadPhone}
             />
           )}
@@ -1105,6 +1121,15 @@ export default function App() {
         onSimulateIncoming={handleSimulateIncoming}
         initialTab={permissionModalTab}
         onOpenAuth={() => setIsAuthModalOpen(true)}
+        onOpenGuide={handleOpenPermissionGuide}
+      />
+
+      {/* 5. Permission & RoleManager Visual Guide Modal */}
+      <PermissionGuideModal
+        isOpen={isPermissionGuideOpen}
+        onClose={() => setIsPermissionGuideOpen(false)}
+        lang={lang}
+        initialRole={permissionGuideInitialRole}
       />
     </div>
   );
