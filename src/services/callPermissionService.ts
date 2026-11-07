@@ -72,6 +72,13 @@ class CallPermissionService {
     this.isDefaultDialer = this.loadDefaultStatus();
     this.isDefaultSmsRole = this.loadDefaultSmsStatus();
     this.callMode = this.loadCallMode();
+
+    // In native Android APK, query real OS system role status on boot
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        this.refreshSystemRoleStatus().catch(() => {});
+      }, 300);
+    }
   }
 
   private loadDefaultSmsStatus(): boolean {
@@ -167,23 +174,43 @@ class CallPermissionService {
     this.save();
   }
 
+  /**
+   * Checks whether the app is active as the Default Dialer.
+   * Requires both role status and core calling permissions to be true.
+   */
   public isDefault(): boolean {
-    return this.isDefaultDialer && this.permissions.roleDialer;
+    return (
+      this.isDefaultDialer &&
+      Boolean(this.permissions.roleDialer) &&
+      Boolean(this.permissions.callPhone)
+    );
   }
 
+  /**
+   * Checks whether the app is active as the Default SMS app.
+   * Requires both SMS role and core SMS messaging permissions to be true.
+   */
   public isDefaultSms(): boolean {
-    return this.isDefaultSmsRole && this.permissions.roleSms;
+    return (
+      this.isDefaultSmsRole &&
+      Boolean(this.permissions.roleSms) &&
+      Boolean(this.permissions.receiveSms) &&
+      Boolean(this.permissions.readSms)
+    );
   }
 
   public hasSmsPermissions(): boolean {
     return (
-      this.permissions.roleSms &&
-      this.permissions.receiveSms &&
-      this.permissions.readSms &&
-      this.permissions.sendSms
+      Boolean(this.permissions.roleSms) &&
+      Boolean(this.permissions.receiveSms) &&
+      Boolean(this.permissions.readSms) &&
+      Boolean(this.permissions.sendSms)
     );
   }
 
+  /**
+   * Toggles the Default SMS App status and cascades to child SMS permissions
+   */
   public setDefaultSms(active: boolean) {
     this.isDefaultSmsRole = active;
     this.permissions.roleSms = active;
@@ -198,45 +225,54 @@ class CallPermissionService {
   }
 
   public enableSmsPermissions() {
-    this.isDefaultSmsRole = true;
-    this.permissions.roleSms = true;
-    this.permissions.receiveSms = true;
-    this.permissions.readSms = true;
-    this.permissions.sendSms = true;
-    this.permissions.receiveMms = true;
-    this.save();
-    this.dispatchAndroidRoleIntent('sms', true);
+    this.setDefaultSms(true);
+  }
+
+  public deactivateDefaultSms() {
+    this.setDefaultSms(false);
   }
 
   public isFullyGranted(): boolean {
     return (
-      this.isDefaultDialer &&
-      this.isDefaultSmsRole &&
+      this.isDefault() &&
+      this.isDefaultSms() &&
       Object.values(this.permissions).every((val) => val === true)
     );
   }
 
+  /**
+   * Granular permission toggle with intelligent cascading
+   */
   public setPermission(key: keyof CallPermissions, granted: boolean) {
-    this.permissions[key] = granted;
     if (key === 'roleDialer') {
-      this.isDefaultDialer = granted;
-      if (granted) {
-        this.permissions.callPhone = true;
-        this.permissions.readPhoneState = true;
-        this.permissions.answerPhoneCalls = true;
-      }
+      this.setDefaultDialer(granted);
+      return;
     }
     if (key === 'roleSms') {
-      this.isDefaultSmsRole = granted;
-      if (granted) {
-        this.permissions.receiveSms = true;
-        this.permissions.readSms = true;
-        this.permissions.sendSms = true;
-      }
+      this.setDefaultSms(granted);
+      return;
     }
+
+    this.permissions[key] = granted;
+
+    // If core calling permission is turned off, dialer role cannot function as active default
+    if (key === 'callPhone' && !granted) {
+      this.isDefaultDialer = false;
+      this.permissions.roleDialer = false;
+    }
+
+    // If core SMS permissions are turned off, SMS role cannot function as active default
+    if ((key === 'receiveSms' || key === 'readSms') && !granted) {
+      this.isDefaultSmsRole = false;
+      this.permissions.roleSms = false;
+    }
+
     this.save();
   }
 
+  /**
+   * Toggles the Default Phone Dialer status and cascades all telephony permissions
+   */
   public setDefaultDialer(active: boolean) {
     this.isDefaultDialer = active;
     this.permissions.roleDialer = active;
@@ -258,6 +294,10 @@ class CallPermissionService {
     this.dispatchAndroidRoleIntent('dialer', active);
   }
 
+  public deactivateDefaultDialer() {
+    this.setDefaultDialer(false);
+  }
+
   /**
    * Dispatches native Android Intent or notifies Android WebView when in APK
    */
@@ -274,7 +314,7 @@ class CallPermissionService {
       })
     );
 
-    // Vibrate device for realistic feedback
+    // Vibrate device for realistic haptic feedback
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
         navigator.vibrate([40, 30, 40]);
@@ -282,13 +322,18 @@ class CallPermissionService {
     }
 
     try {
+      // 1. First priority: Direct AndroidBridge JavascriptInterface injected in MainActivity.java
       if ((window as any).AndroidBridge?.requestRole) {
         (window as any).AndroidBridge.requestRole(role);
-      } else if ((window as any).Capacitor?.isNativePlatform?.()) {
+        return;
+      }
+
+      // 2. Second priority: Capacitor Native Intent handler with exact action & extra parameters
+      if ((window as any).Capacitor?.isNativePlatform?.()) {
         const intentUrl =
           role === 'dialer'
-            ? 'intent:#Intent;action=android.telecom.action.CHANGE_DEFAULT_DIALER;package=com.smartdialer.telecom;end'
-            : 'intent:#Intent;action=android.provider.Telephony.ACTION_CHANGE_DEFAULT;package=com.smartdialer.telecom;end';
+            ? 'intent:#Intent;action=android.telecom.action.CHANGE_DEFAULT_DIALER;S.android.telecom.extra.CHANGE_DEFAULT_DIALER_PACKAGE_NAME=com.smartdialer.telecom;package=com.smartdialer.telecom;end'
+            : 'intent:#Intent;action=android.provider.Telephony.ACTION_CHANGE_DEFAULT;S.package=com.smartdialer.telecom;package=com.smartdialer.telecom;end';
         window.open(intentUrl, '_system');
       }
     } catch (e) {
@@ -296,6 +341,37 @@ class CallPermissionService {
     }
   }
 
+  /**
+   * Synchronizes internal role state with native Android OS if running inside APK
+   */
+  public async refreshSystemRoleStatus(): Promise<{ isDialer: boolean; isSms: boolean }> {
+    let nativeDialer = this.isDefaultDialer;
+    let nativeSms = this.isDefaultSmsRole;
+
+    if (typeof window !== 'undefined' && (window as any).AndroidBridge) {
+      try {
+        if (typeof (window as any).AndroidBridge.isDefaultDialer === 'function') {
+          nativeDialer = Boolean((window as any).AndroidBridge.isDefaultDialer());
+        }
+        if (typeof (window as any).AndroidBridge.isDefaultSms === 'function') {
+          nativeSms = Boolean((window as any).AndroidBridge.isDefaultSms());
+        }
+        this.isDefaultDialer = nativeDialer;
+        this.permissions.roleDialer = nativeDialer;
+        this.isDefaultSmsRole = nativeSms;
+        this.permissions.roleSms = nativeSms;
+        this.save();
+      } catch (err) {
+        console.warn('Could not query AndroidBridge role status:', err);
+      }
+    }
+
+    return { isDialer: this.isDefault(), isSms: this.isDefaultSms() };
+  }
+
+  /**
+   * Activates all permissions, browser notifications, and microphone in 1 tap
+   */
   public async activateAllPermissions(): Promise<CallPermissions> {
     // Attempt real browser notification permission request if available
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -354,9 +430,9 @@ class CallPermissionService {
    */
   public hasSimPermissions(): boolean {
     return (
-      this.permissions.readContacts &&
-      this.permissions.writeContacts &&
-      this.permissions.simCardContacts
+      Boolean(this.permissions.readContacts) &&
+      Boolean(this.permissions.writeContacts) &&
+      Boolean(this.permissions.simCardContacts)
     );
   }
 
@@ -379,18 +455,13 @@ class CallPermissionService {
     return true;
   }
 
-  public deactivateDefaultDialer() {
-    this.isDefaultDialer = false;
-    this.permissions.roleDialer = false;
-    this.save();
-  }
-
   /**
-   * Triggers a REAL SIM / cellular phone call using native device telephony
+   * Triggers a REAL SIM / cellular phone call using native device telephony.
+   * Handles USSD codes (*121#, *566#) by encoding '#' properly.
    */
   public makeRealCall(phoneNumber: string): boolean {
     if (!phoneNumber) return false;
-    // Clean phone number keeping only digits and leading +
+    // Clean phone number keeping only digits and leading + or USSD * #
     const clean = phoneNumber.replace(/[^\d+*#]/g, '');
     if (!clean) return false;
 
@@ -408,7 +479,10 @@ class CallPermissionService {
 
       // Trigger the OS native dialer / phone call via tel:
       try {
-        const telUrl = `tel:${clean}`;
+        // Encode # as %23 for browser URL safety (essential for USSD codes like *121#)
+        const encodedPhone = clean.replace(/#/g, '%23');
+        const telUrl = `tel:${encodedPhone}`;
+
         // 1. In Capacitor Android apps, window.open with _system tells WebView to dispatch native Intent
         if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
           window.open(telUrl, '_system');
@@ -431,12 +505,52 @@ class CallPermissionService {
       } catch (err) {
         console.error('Error invoking tel: protocol:', err);
         try {
-          window.location.href = `tel:${clean}`;
+          const encodedPhone = clean.replace(/#/g, '%23');
+          window.location.href = `tel:${encodedPhone}`;
           return true;
         } catch (fallbackErr) {
           console.error('Fallback tel: error:', fallbackErr);
           return false;
         }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Triggers native SMS messaging application with recipient and optional body
+   */
+  public sendNativeSms(phoneNumber: string, messageBody?: string): boolean {
+    if (!phoneNumber) return false;
+    const clean = phoneNumber.replace(/[^\d+]/g, '');
+    if (!clean) return false;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const smsUrl = messageBody
+          ? `sms:${clean}?body=${encodeURIComponent(messageBody)}`
+          : `sms:${clean}`;
+
+        if ((window as any).Capacitor?.isNativePlatform?.()) {
+          window.open(smsUrl, '_system');
+          return true;
+        }
+
+        const a = document.createElement('a');
+        a.href = smsUrl;
+        a.target = '_system';
+        a.rel = 'noopener noreferrer';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          if (document.body.contains(a)) document.body.removeChild(a);
+        }, 150);
+
+        return true;
+      } catch (err) {
+        console.error('Error invoking sms: protocol:', err);
+        return false;
       }
     }
     return false;
@@ -496,7 +610,7 @@ class CallPermissionService {
           'আপনার ফোনের Settings (সেটিংস) এ প্রবেশ করুন।',
           'Apps / App Management (অ্যাপ্লিকেশন) অপশনে চাপুন।',
           '"Smart Dialer" খুঁজে বের করে তাতে ট্যাপ করুন।',
-          'Permissions (অনুমতিসমূহ) এ গিয়ে "Phone", "Call logs", "Contacts", এবং "Microphone" এর পাশে "Allow" করে দিন।',
+          'Permissions (অনুমতিসমূহ) এ গিয়ে "Phone", "Call logs", "Contacts", "SMS" এবং "Microphone" এর পাশে "Allow" করে দিন।',
           'লক স্ক্রিনের ওপর কলার আইডি দেখতে "Display over other apps" (অন্যান্য অ্যাপের উপর প্রদর্শন) অন করে দিন।',
         ],
       };
@@ -507,7 +621,7 @@ class CallPermissionService {
         'Open your phone Settings app.',
         'Navigate to Apps or Application Management.',
         'Locate and tap "Smart Dialer".',
-        'Tap Permissions and set "Phone", "Call logs", "Contacts", and "Microphone" to "Allow".',
+        'Tap Permissions and set "Phone", "Call logs", "Contacts", "SMS", and "Microphone" to "Allow".',
         'Enable "Display over other apps" for the Truecaller-style floating caller ID.',
       ],
     };

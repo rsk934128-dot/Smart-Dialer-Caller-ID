@@ -875,6 +875,8 @@ export default function App() {
             <AndroidGuide
               lang={lang}
               onSimulateIncoming={handleSimulateIncoming}
+              onOpenAuth={() => setIsAuthModalOpen(true)}
+              syncStatus={syncStatus}
             />
           )}
 

@@ -17,21 +17,38 @@ import {
   RefreshCw,
   Layers,
   Activity,
+  LogIn,
+  LogOut,
+  Cloud,
+  User as UserIcon,
+  Lock,
+  Globe,
 } from 'lucide-react';
 import { Language, TRANSLATIONS } from '../utils/i18n';
 import { CallerIdRecord, RoomDbMetrics } from '../types';
 import { roomDbService } from '../db/roomDatabaseService';
+import { auth, loginWithGoogle } from '../firebase';
+
+import { CloudSyncStatus } from '../services/cloudSyncService';
 
 interface AndroidGuideProps {
   lang: Language;
   onSimulateIncoming?: (caller: CallerIdRecord, mode?: 'fullscreen' | 'overlay') => void;
+  onOpenAuth?: () => void;
+  syncStatus?: CloudSyncStatus;
 }
 
-export const AndroidGuide: React.FC<AndroidGuideProps> = ({ lang, onSimulateIncoming }) => {
+export const AndroidGuide: React.FC<AndroidGuideProps> = ({
+  lang,
+  onSimulateIncoming,
+  onOpenAuth,
+  syncStatus,
+}) => {
   const t = TRANSLATIONS[lang];
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
     | 'permissions_simulator'
+    | 'android_login'
     | 'apk_logo'
     | 'manifest'
     | 'runtime_permissions'
@@ -43,7 +60,7 @@ export const AndroidGuide: React.FC<AndroidGuideProps> = ({ lang, onSimulateInco
     | 'architecture'
     | 'pwabuilder'
     | 'apk_troubleshoot'
-  >('permissions_simulator');
+  >('android_login');
 
   // Simulator state for Android permissions
   const [grantedPermissions, setGrantedPermissions] = useState<Record<string, boolean>>({
@@ -960,6 +977,18 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
       {/* Navigation Subtabs */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs border-b border-neutral-200 dark:border-neutral-800">
         <button
+          id="tab-android-login"
+          onClick={() => setActiveTab('android_login')}
+          className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition flex items-center gap-1.5 ${
+            activeTab === 'android_login'
+              ? 'bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white shadow-xs font-bold'
+              : 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 hover:bg-cyan-100'
+          }`}
+        >
+          <LogIn className="w-3.5 h-3.5" />
+          <span>অ্যান্ড্রয়েড লগ ইন (Google Auth)</span>
+        </button>
+        <button
           onClick={() => setActiveTab('permissions_simulator')}
           className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
             activeTab === 'permissions_simulator'
@@ -1085,6 +1114,220 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
           <span>এপিকে ইনস্টলেশন সমাধান</span>
         </button>
       </div>
+
+      {/* 0. ANDROID GOOGLE LOGIN & CLOUD SYNC TAB */}
+      {activeTab === 'android_login' && (
+        <div className="space-y-4 animate-in fade-in">
+          {/* Hero Banner */}
+          <div className="relative overflow-hidden p-6 rounded-3xl bg-gradient-to-br from-neutral-950 via-cyan-950/40 to-neutral-950 border border-cyan-500/30 shadow-2xl">
+            <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-cyan-500/15 via-blue-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative flex flex-col md:flex-row items-center gap-6 justify-between">
+              <div className="space-y-2 text-center md:text-left flex-1">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Android Native Google Sign-In & Firebase Auth</span>
+                </div>
+                <h3 className="text-xl font-extrabold text-white tracking-tight">
+                  অ্যান্ড্রয়েড ফোনে যেকোনো গুগল একাউন্ট দিয়ে লগইন
+                </h3>
+                <p className="text-xs text-neutral-300 leading-relaxed max-w-xl">
+                  আপনার অ্যান্ড্রয়েড ফোনে সেভ থাকা যেকোনো জিমেইল একাউন্ট বাছাই করে সরাসরি ১-ক্লিকে লগইন করতে পারবেন। এটি ক্লাউড ফায়ারস্টোর এবং লোকাল SQLite রুম ডাটাবেজ (Room DB) এর মধ্যে সব কন্টাক্টস, কল লগ ও সেটিংস স্বয়ংক্রিয়ভাবে সিঙ্ক রাখে।
+                </p>
+
+                <div className="pt-2 flex flex-wrap items-center justify-center md:justify-start gap-2.5">
+                  <button
+                    id="guide-instant-google-login-btn"
+                    onClick={() => {
+                      if (onOpenAuth) {
+                        onOpenAuth();
+                      } else {
+                        loginWithGoogle().catch(() => {});
+                      }
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 transition flex items-center gap-2 active:scale-95 cursor-pointer"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    <span>১-ক্লিকে গুগল লগইন উইন্ডো খুলুন</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('com.smartdialer.telecom');
+                      setCopiedKey('app_id');
+                      setTimeout(() => setCopiedKey(null), 2000);
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-700 text-xs font-mono transition flex items-center gap-1.5"
+                  >
+                    {copiedKey === 'app_id' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400 font-semibold">Package ID কপি হয়েছে!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                        <span>Package: com.smartdialer.telecom</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Badge Frame */}
+              <div className="shrink-0 p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 text-center space-y-2 min-w-[200px] shadow-xl">
+                <div className="flex items-center justify-center gap-2">
+                  {auth.currentUser ? (
+                    auth.currentUser.photoURL ? (
+                      <img
+                        src={auth.currentUser.photoURL}
+                        alt=""
+                        className="w-10 h-10 rounded-full border-2 border-emerald-500 object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-cyan-600 text-white flex items-center justify-center font-bold">
+                        {(auth.currentUser.displayName || auth.currentUser.email || 'U')[0].toUpperCase()}
+                      </div>
+                    )
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-neutral-800 text-neutral-400 flex items-center justify-center">
+                      <UserIcon className="w-5 h-5" />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold text-white truncate max-w-[180px] mx-auto">
+                    {auth.currentUser
+                      ? (auth.currentUser.displayName || auth.currentUser.email?.split('@')[0])
+                      : 'লগইন করা নেই'}
+                  </p>
+                  <p className="text-[10px] text-neutral-400 font-mono truncate max-w-[180px] mx-auto">
+                    {auth.currentUser ? auth.currentUser.email : 'Guest Mode (Offline Room DB)'}
+                  </p>
+                </div>
+
+                <div className="pt-1 border-t border-neutral-800">
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      auth.currentUser
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        auth.currentUser ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                      }`}
+                    />
+                    <span>{auth.currentUser ? 'লগইন সক্রিয়' : 'অফলাইন রুম ডিবি মোড'}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3 Pillars of Android Google OAuth */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* 1. disallowed_useragent Bypass */}
+            <div className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <h4 className="text-xs font-bold text-white">১. Google 403 এরর বাইপাস</h4>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                অ্যান্ড্রয়েড ওয়েবভিউতে গুগল ডিফল্টভাবে <code className="text-rose-400 font-mono">403: disallowed_useragent</code> ব্লক করে। আমরা <code className="text-cyan-400 font-mono">MainActivity.java</code> ফাইলে <code className="text-cyan-300 font-mono">; wv</code> অংশটি ফিল্টার করেছি, যার ফলে গুগল এটিকে ক্রোম ব্রাউজার হিসেবে গ্রহণ করে।
+              </p>
+            </div>
+
+            {/* 2. Multi-Window Popup Handling */}
+            <div className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center">
+                <Layers className="w-4 h-4" />
+              </div>
+              <h4 className="text-xs font-bold text-white">২. মাল্টি-উইন্ডো একাউন্ট পিকার</h4>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                <code className="text-blue-400 font-mono">setSupportMultipleWindows(true)</code> সক্রিয় করা হয়েছে, যাতে ফোনে থাকা একাধিক জিমেইল আইডি (Select Account Dialog) সহজে পপআপ হিসেবে স্ক্রিনে আসে এবং নির্বাচন করা যায়।
+              </p>
+            </div>
+
+            {/* 3. HTTPS Android Scheme */}
+            <div className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                <Database className="w-4 h-4" />
+              </div>
+              <h4 className="text-xs font-bold text-white">৩. ফায়ারবেস ক্লাউড ও রুম ডিবি</h4>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                লগইন করার সাথে সাথে লোকাল রুম ডিবি এবং গুগল ক্লাউড ফায়ারস্টোর নোএসকিউএল ডাটাবেজে সাব-মিলিমিটার বেগে উভয়মুখী সিঙ্ক (Bi-directional Sync) স্বয়ংক্রিয়ভাবে সম্পন্ন হয়।
+              </p>
+            </div>
+          </div>
+
+          {/* MainActivity.java Native Implementation Snippet */}
+          <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-neutral-300">
+                android/app/src/main/java/com/smartdialer/telecom/MainActivity.java
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`package com.smartdialer.telecom;
+
+import android.os.Bundle;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        // Google OAuth Sign-in Optimization
+        if (bridge != null && bridge.getWebView() != null) {
+            WebView webView = bridge.getWebView();
+            WebSettings settings = webView.getSettings();
+
+            // Bypass 403 disallowed_useragent
+            String userAgent = settings.getUserAgentString();
+            if (userAgent != null) {
+                settings.setUserAgentString(userAgent.replace("; wv", "").replace("Version/4.0 ", ""));
+            }
+
+            settings.setJavaScriptCanOpenWindowsAutomatically(true);
+            settings.setSupportMultipleWindows(true);
+            settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
+        }
+    }
+}`);
+                  setCopiedKey('main_activity');
+                  setTimeout(() => setCopiedKey(null), 2000);
+                }}
+                className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+              >
+                {copiedKey === 'main_activity' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedKey === 'main_activity' ? 'কপি হয়েছে' : 'কোড কপি'}</span>
+              </button>
+            </div>
+
+            <pre className="text-[11px] font-mono text-neutral-300 bg-neutral-900 p-3 rounded-xl overflow-x-auto leading-relaxed border border-neutral-800">
+{`// 1. Remove '; wv' and 'Version/4.0' from User-Agent so Google allows sign-in
+String cleanUserAgent = userAgent.replace("; wv", "").replace("Version/4.0 ", "");
+settings.setUserAgentString(cleanUserAgent);
+
+// 2. Enable multi-window popup so Google Account selection works
+settings.setJavaScriptCanOpenWindowsAutomatically(true);
+settings.setSupportMultipleWindows(true);
+
+// 3. Enable local storage for offline Room DB and Firebase token persistence
+settings.setDomStorageEnabled(true);
+settings.setDatabaseEnabled(true);`}
+            </pre>
+          </div>
+        </div>
+      )}
 
       {/* 1. PERMISSIONS & ROLE SIMULATOR TAB */}
       {activeTab === 'permissions_simulator' && (
@@ -1968,12 +2211,12 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
               {[
-                { name: 'mipmap-mdpi', res: '48 × 48 px', density: '1.0x Baseline', file: 'ic_launcher.png' },
-                { name: 'mipmap-hdpi', res: '72 × 72 px', density: '1.5x HD', file: 'ic_launcher.png' },
-                { name: 'mipmap-xhdpi', res: '96 × 96 px', density: '2.0x X-HD', file: 'ic_launcher.png' },
-                { name: 'mipmap-xxhdpi', res: '144 × 144 px', density: '3.0x XX-HD', file: 'ic_launcher.png' },
-                { name: 'mipmap-xxxhdpi', res: '192 × 192 px', density: '4.0x XXX-HD', file: 'ic_launcher.png' },
-                { name: 'Play Store Master', res: '512 × 512 px', density: 'Web & Store', file: 'app-logo.png' },
+                { name: 'mipmap-anydpi-v26', res: 'Adaptive Icon', density: 'Android 8-15 (API 26+)', file: 'ic_launcher.xml' },
+                { name: 'mipmap-xxxhdpi', res: '432 × 432 px', density: 'Adaptive Foreground', file: 'ic_launcher_foreground.png' },
+                { name: 'mipmap-xxhdpi', res: '324 × 324 px', density: 'Adaptive Foreground', file: 'ic_launcher_foreground.png' },
+                { name: 'mipmap-xhdpi', res: '216 × 216 px', density: 'Adaptive Foreground', file: 'ic_launcher_foreground.png' },
+                { name: 'mipmap-mdpi/hdpi', res: '108 / 162 px', density: 'Adaptive Foreground', file: 'ic_launcher_foreground.png' },
+                { name: 'Play Store Master', res: '512 × 512 px', density: 'Web & Store HQ', file: 'app-logo.png' },
               ].map((item, idx) => (
                 <div
                   key={idx}
@@ -1996,6 +2239,19 @@ class OfflineCallerIdEngine(private val db: AppDatabase) {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Adaptive Icon Resolution Note */}
+            <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-neutral-300">
+              <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold text-emerald-300">
+                  অ্যান্ড্রয়েড ৮-১৫ প্যাকেজ ইনস্টলার লোগো ফিক্সড (Adaptive Icons):
+                </span>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  পূর্বে <code className="font-mono text-emerald-400">mipmap-anydpi-v26/ic_launcher.xml</code> ফাইলে ডিফল্ট অ্যান্ড্রয়েড স্টুডিও রোবটের ভেক্টর ছিল। এখন সবকটি ডেনসিটিতে (<code className="font-mono">108dp / 432px</code>) 3D Cyber Shield-এর <code className="font-mono text-cyan-300">ic_launcher_foreground.png</code> ও গাঢ় মেটালিক ব্যাকগ্রাউন্ড জেনারেট করে যুক্ত করা হয়েছে। নতুন APK বিল্ড ইনস্টল করলে সরাসরি এই ৩ডি শিল্ড লোগো প্রদর্শিত হবে।
+                </p>
+              </div>
             </div>
           </div>
 

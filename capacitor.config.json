@@ -3,6 +3,9 @@
   "appName": "Smart Dialer & Caller ID",
   "webDir": "dist",
   "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
   "android": {
     "allowMixedContent": true,
     "captureInput": true,
