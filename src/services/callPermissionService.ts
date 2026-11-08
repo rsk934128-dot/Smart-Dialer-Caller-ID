@@ -102,6 +102,11 @@ export const RoleManager = {
    * Directly opens OS App Details / Permissions settings
    */
   openAppSettings: () => callPermissionService.openAppSettings(),
+
+  /**
+   * Triggers a dummy dialer intent to test and verify system registration
+   */
+  testDummyDialerIntent: (number?: string) => callPermissionService.testDummyDialerIntent(number),
 } as const;
 
 type Listener = (
@@ -554,6 +559,56 @@ class CallPermissionService {
     } catch (e) {
       console.warn('Cannot open app details settings:', e);
     }
+  }
+
+  /**
+   * Triggers a dummy dialer intent to test and confirm system registration as default dialer.
+   * Dispatches Intent.ACTION_DIAL with tel: protocol or direct AndroidBridge dispatch.
+   */
+  public async testDummyDialerIntent(testNumber: string = '123'): Promise<{
+    success: boolean;
+    isDefaultHeld: boolean;
+    intentAction: string;
+    uri: string;
+    timestamp: number;
+  }> {
+    const isDefaultHeld = await this.checkDefaultDialerStatus();
+    const uri = `tel:${testNumber}`;
+    let success = false;
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('smart_dialer_test_intent_triggered', {
+          detail: {
+            action: 'android.intent.action.DIAL',
+            uri,
+            timestamp: Date.now(),
+          },
+        })
+      );
+
+      // 1. AndroidBridge direct dispatch (MainActivity.java)
+      if ((window as any).AndroidBridge?.triggerDummyDialIntent) {
+        try {
+          success = Boolean((window as any).AndroidBridge.triggerDummyDialIntent(testNumber));
+        } catch (err) {
+          console.warn('AndroidBridge dummy dial intent error:', err);
+        }
+      }
+
+      // 2. Fallback via standard tel: protocol dispatch
+      if (!success) {
+        success = this.makeRealCall(testNumber);
+      }
+    }
+
+    return {
+      success,
+      isDefaultHeld,
+      intentAction: 'android.intent.action.DIAL',
+      uri,
+      timestamp: Date.now(),
+    };
   }
 
   /**

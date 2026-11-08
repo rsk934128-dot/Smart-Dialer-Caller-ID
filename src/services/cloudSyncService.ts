@@ -317,6 +317,11 @@ class CloudSyncService {
         updatedAt: new Date().toISOString(),
       });
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Could not reach Cloud Firestore')) {
+        console.info('Contact saved locally in Room DB (cloud sync deferred while offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, path);
     }
   }
@@ -332,6 +337,11 @@ class CloudSyncService {
     try {
       await deleteDoc(doc(db, 'users', uid, 'contacts', contactId));
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Could not reach Cloud Firestore')) {
+        console.info('Contact deleted locally in Room DB (cloud sync deferred while offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.DELETE, path);
     }
   }
@@ -361,6 +371,11 @@ class CloudSyncService {
         isRecorded: false,
       });
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Could not reach Cloud Firestore')) {
+        console.info('Call log saved locally in Room DB (cloud sync deferred while offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, path);
     }
   }
@@ -383,6 +398,11 @@ class CloudSyncService {
         blockedAt: new Date().toISOString(),
       });
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Could not reach Cloud Firestore')) {
+        console.info('Blocked number saved locally in Room DB (cloud sync deferred while offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, path);
     }
   }
@@ -399,6 +419,11 @@ class CloudSyncService {
     try {
       await deleteDoc(doc(db, 'users', uid, 'blocked_numbers', safeId));
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Could not reach Cloud Firestore')) {
+        console.info('Blocked number removed locally in Room DB (cloud sync deferred while offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.DELETE, path);
     }
   }

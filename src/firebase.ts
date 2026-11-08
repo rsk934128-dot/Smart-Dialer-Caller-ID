@@ -18,7 +18,6 @@ import {
   doc,
   setDoc,
   getDoc,
-  getDocFromServer,
   collection,
   getDocs,
   deleteDoc,
@@ -26,14 +25,23 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
   memoryLocalCache,
+  setLogLevel,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+
+// Silence verbose connection warnings from Firestore SDK (e.g., 10-second backend timeout warning)
+// to ensure seamless offline-first operation with local Room DB
+try {
+  setLogLevel('error');
+} catch {
+  // ignore in unsupported runtimes
+}
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with forced long polling and multi-tab persistent cache
-// Using experimentalForceLongPolling eliminates the 10-second WebSocket handshake timeout in preview iframes
+// Using experimentalForceLongPolling eliminates WebSocket issues in iframe sandboxes & mobile WebViews
 let dbInstance;
 const databaseId = (firebaseConfig as any).firestoreDatabaseId;
 
@@ -65,20 +73,6 @@ try {
 
 export const db = dbInstance;
 export const auth = getAuth(app);
-
-// Validate connection to Firestore as per Firebase skill guidelines
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firestore client operating in offline mode. Local Room DB handling all persistence.');
-    }
-  }
-}
-if (typeof window !== 'undefined') {
-  testConnection().catch(() => {});
-}
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });

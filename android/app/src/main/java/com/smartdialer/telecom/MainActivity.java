@@ -183,6 +183,21 @@ public class MainActivity extends BridgeActivity {
                     });
                 }
 
+                @JavascriptInterface
+                public boolean triggerDummyDialIntent(String number) {
+                    try {
+                        String testNumber = (number != null && !number.isEmpty()) ? number : "123";
+                        Intent intent = new Intent(Intent.ACTION_DIAL);
+                        intent.setData(android.net.Uri.parse("tel:" + testNumber));
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                        return true;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return false;
+                    }
+                }
+
                 private void notifyRoleResult(String role, boolean granted) {
                     runOnUiThread(() -> {
                         if (webView != null) {

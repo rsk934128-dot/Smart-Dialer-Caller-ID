@@ -180,6 +180,59 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
       >
         {/* Top bar with Caller ID status badges & Recording banner */}
         <div className="flex flex-col items-center gap-2 pt-2 text-center w-full">
+          {/* Dedicated Visual Indicator with Pulse Animation for Call Recording */}
+          {call.isRecording && (
+            <div
+              id="call-recording-pulse-indicator"
+              className="w-full flex items-center justify-between px-3.5 py-2 rounded-2xl bg-gradient-to-r from-red-950 via-rose-950 to-neutral-950 border-2 border-red-500/80 shadow-[0_0_30px_rgba(239,68,68,0.5)] ring-2 ring-red-400/40 animate-pulse transition-all duration-300"
+              role="status"
+              aria-live="polite"
+              aria-label={isBn ? 'কল রেকর্ড হচ্ছে' : 'Call recording in progress'}
+            >
+              {/* Left: Concentric Pulsing Red Beacon & Status */}
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-4 w-4 items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-80 duration-1000" />
+                  <span className="animate-pulse absolute inline-flex h-5 w-5 rounded-full bg-red-500/30" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600 border border-white shadow-[0_0_10px_rgba(239,68,68,1)]" />
+                </span>
+                <div className="flex items-center gap-1.5 text-left">
+                  <span className="font-mono font-black text-white tracking-widest bg-red-600 px-1.5 py-0.5 rounded text-[10px] shadow-xs">
+                    REC
+                  </span>
+                  <span className="text-xs font-bold text-red-100 tracking-tight">
+                    {isBn ? 'কল রেকর্ড হচ্ছে' : 'Recording in Progress'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right: Pulsing Audio Frequency Bars & Live Duration */}
+              <div className="flex items-center gap-2">
+                {/* 5-bar animated audio equalizer */}
+                <div className="flex items-end gap-1 h-4 px-2 py-0.5 rounded-lg bg-black/60 border border-red-500/40">
+                  {[40, 85, 55, 100, 70].map((height, i) => (
+                    <span
+                      key={i}
+                      className="w-1 bg-gradient-to-t from-red-600 to-amber-300 rounded-full animate-pulse"
+                      style={{
+                        height: `${height}%`,
+                        animationDelay: `${i * 150}ms`,
+                        animationDuration: '700ms',
+                      }}
+                    />
+                  ))}
+                </div>
+                <div
+                  id="recording-pulse-timer"
+                  className="flex items-center gap-1 font-mono font-bold text-xs text-red-200 bg-black/80 px-2 py-0.5 rounded-lg border border-red-400/60 shadow-inner"
+                >
+                  <CircleDot className="w-3 h-3 text-red-400 animate-pulse shrink-0" />
+                  <span>{formatDuration(recordingSeconds)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Prominent Recording Status Banner with Live Waveform Mapping & Sparkle Glow */}
           {call.isRecording && call.state === 'connected' && (
             <div
@@ -286,10 +339,14 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
           <div className="relative mb-4">
             {/* Multi-Layer Prominent Pulse Halo Indicator When Recording */}
             {call.isRecording && (
-              <>
-                <div className="absolute -inset-6 rounded-full border-2 border-red-500/40 animate-ping pointer-events-none opacity-60 duration-1000" />
-                <div className="absolute -inset-3 rounded-full border-2 border-red-500 animate-pulse pointer-events-none shadow-[0_0_25px_rgba(239,68,68,0.7)] ring-4 ring-red-500/25" />
-              </>
+              <div id="avatar-recording-pulse-indicator" className="pointer-events-none">
+                {/* Outer expanding radar pulse wave 1 */}
+                <div className="absolute -inset-9 rounded-full border-2 border-red-500/25 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] opacity-50" />
+                {/* Expanding radar pulse wave 2 */}
+                <div className="absolute -inset-6 rounded-full border-2 border-red-500/50 animate-ping opacity-70 duration-1000" />
+                {/* Glowing breathing pulse ring 3 */}
+                <div className="absolute -inset-3 rounded-full border-2 border-red-500 animate-pulse shadow-[0_0_35px_rgba(239,68,68,0.75)] ring-4 ring-red-500/30" />
+              </div>
             )}
 
             <div
@@ -306,18 +363,20 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
               </div>
             </div>
 
-            {/* Prominent Recording Badge attached to Avatar with Live Timer */}
+            {/* Prominent Recording Badge attached to Avatar with Live Timer & Pulse Indicator */}
             {call.isRecording && (
               <div
                 id="avatar-recording-badge"
-                className="absolute -bottom-2.5 inset-x-0 mx-auto w-fit flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-600 border-2 border-neutral-900 shadow-[0_0_15px_rgba(239,68,68,0.9)] z-10"
+                className="absolute -bottom-3 inset-x-0 mx-auto w-fit flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 border-2 border-neutral-900 shadow-[0_0_20px_rgba(239,68,68,0.95)] ring-2 ring-red-400/60 z-10 animate-bounce duration-1000"
               >
-                <span className="relative flex h-2 w-2">
+                <span className="relative flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-90" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white shadow-xs" />
                 </span>
-                <span className="font-mono text-[10px] font-black text-white tracking-widest">
-                  REC {formatDuration(recordingSeconds)}
+                <span className="font-mono text-[10px] font-black text-white tracking-widest flex items-center gap-1">
+                  <span>REC</span>
+                  <span className="opacity-75">•</span>
+                  <span>{formatDuration(recordingSeconds)}</span>
                 </span>
               </div>
             )}
@@ -593,23 +652,23 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
                   onClick={onToggleRecord}
                   className={`relative flex flex-col items-center justify-center p-3 rounded-2xl transition-all cursor-pointer ${
                     call.isRecording
-                      ? 'bg-gradient-to-b from-red-600/35 via-red-900/50 to-red-950/70 text-red-100 border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.55)] ring-2 ring-red-400/40 animate-pulse'
+                      ? 'bg-gradient-to-b from-red-600/40 via-red-900/60 to-red-950/80 text-red-100 border-2 border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.6)] ring-2 ring-red-400/50 animate-pulse'
                       : 'bg-neutral-800/70 hover:bg-neutral-800 text-neutral-200'
                   }`}
                   title={call.isRecording ? t.stopRecording || 'Stop Recording' : t.record}
                 >
-                  {/* Top-right pulsing red recording beacon */}
+                  {/* Top-right pulsing red recording beacon with double rings */}
                   {call.isRecording && (
-                    <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-80" />
-                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-600 border border-white ring-1 ring-red-400" />
+                    <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-90" />
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 border-2 border-white ring-1 ring-red-400 shadow-[0_0_8px_rgba(239,68,68,1)]" />
                     </span>
                   )}
 
                   <div className="relative">
                     <Disc className={`w-5 h-5 ${call.isRecording ? 'animate-spin text-red-400' : ''}`} />
                     {call.isRecording && (
-                      <span className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                      <span className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-white animate-ping" />
                     )}
                   </div>
 
@@ -621,9 +680,10 @@ export const ActiveCallModal: React.FC<ActiveCallModalProps> = ({
                   {call.isRecording && (
                     <span
                       id="btn-recording-timer"
-                      className="text-[10px] font-mono text-red-200 font-black mt-0.5 tracking-tight px-1.5 py-0.2 rounded-md bg-black/60 border border-red-500/40"
+                      className="text-[10px] font-mono text-red-200 font-black mt-0.5 tracking-tight px-1.5 py-0.2 rounded-md bg-black/70 border border-red-500/50 flex items-center gap-1 shadow-inner"
                     >
-                      {formatDuration(recordingSeconds)}
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping inline-block" />
+                      <span>{formatDuration(recordingSeconds)}</span>
                     </span>
                   )}
                 </button>

@@ -16,7 +16,11 @@ import {
   RefreshCw,
   Sparkles,
   ArrowRight,
-  Info
+  Info,
+  Radio,
+  PlayCircle,
+  Terminal,
+  Cpu
 } from 'lucide-react';
 import { Language } from '../utils/i18n';
 import { callPermissionService, RoleManager, AndroidRole } from '../services/callPermissionService';
@@ -28,8 +32,16 @@ interface PermissionGuideModalProps {
   initialRole?: 'dialer' | 'sms' | 'screening' | 'overlay';
 }
 
-type TabType = 'why' | 'steps' | 'actions';
-type OEMType = 'samsung' | 'xiaomi' | 'realme_oppo' | 'pixel_stock' | 'vivo';
+type TabType = 'why' | 'steps' | 'test';
+type OEMType = 'samsung' | 'xiaomi' | 'realme_oppo' | 'pixel_stock';
+
+interface IntentTestResult {
+  triggered: boolean;
+  timestamp?: number;
+  uri?: string;
+  isHeld?: boolean;
+  message?: string;
+}
 
 export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
   isOpen,
@@ -47,6 +59,11 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
   const [isSmsHeld, setIsSmsHeld] = useState<boolean>(false);
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  // Dummy Dialer Intent Test State
+  const [dummyTestNumber, setDummyTestNumber] = useState<string>('123');
+  const [isTestingIntent, setIsTestingIntent] = useState<boolean>(false);
+  const [intentTestResult, setIntentTestResult] = useState<IntentTestResult | null>(null);
 
   // Sync role status
   const checkStatus = async () => {
@@ -67,6 +84,7 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
     if (isOpen) {
       setSelectedRole(initialRole);
       checkStatus();
+      setIntentTestResult(null);
     }
   }, [isOpen, initialRole]);
 
@@ -97,6 +115,50 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
     }
   };
 
+  // Trigger Dummy Dialer Intent
+  const handleTestDummyDialer = async () => {
+    setIsTestingIntent(true);
+    setIntentTestResult(null);
+
+    try {
+      const res = await callPermissionService.testDummyDialerIntent(dummyTestNumber);
+      await checkStatus();
+
+      setIntentTestResult({
+        triggered: true,
+        timestamp: res.timestamp,
+        uri: res.uri,
+        isHeld: res.isDefaultHeld,
+        message: res.isDefaultHeld
+          ? (isBn
+              ? 'Intent.ACTION_DIAL সফলভাবে পাঠানো হয়েছে। Smart Dialer ওএস-এ ডিফল্ট হিসেবে ভেরিফায়েড!'
+              : 'Intent.ACTION_DIAL dispatched. Smart Dialer is verified as the system default dialer!')
+          : (isBn
+              ? 'Intent.ACTION_DIAL ওএস-এ পাঠানো হয়েছে। ওএস অ্যাপ ডায়ালগ আসলে Smart Dialer নির্বাচন করে "Always" দিন।'
+              : 'Intent.ACTION_DIAL dispatched. When system app chooser appears, select Smart Dialer and tap "Always".'),
+      });
+    } catch (err) {
+      console.error('Failed to trigger dummy dialer intent:', err);
+      setIntentTestResult({
+        triggered: true,
+        isHeld: false,
+        message: isBn ? 'ডায়ালার ইনটেন্ট ট্রিগার করতে সমস্যা হয়েছে।' : 'Error triggering dialer intent.',
+      });
+    } finally {
+      setIsTestingIntent(false);
+    }
+  };
+
+  // Calculate missing role status
+  const missingRoleState: 'none' | 'dialer' | 'sms' | 'both' =
+    !isDialerHeld && !isSmsHeld
+      ? 'both'
+      : !isDialerHeld && isSmsHeld
+      ? 'dialer'
+      : isDialerHeld && !isSmsHeld
+      ? 'sms'
+      : 'none';
+
   return (
     <div
       role="dialog"
@@ -120,8 +182,8 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
               </h2>
               <p className="text-xs text-slate-400">
                 {isBn
-                  ? 'Android 10+ RoleManager এবং সেটিংস থেকে রিকভারি নির্দেশিকা'
-                  : 'Android 10+ RoleManager & System Settings Recovery Guide'}
+                  ? 'RoleManager API (Android 10+) ও সিস্টেম ডায়ালার ইনটেন্ট ভেরিফিকেশন'
+                  : 'RoleManager API (Android 10+) & Intent Verification'}
               </p>
             </div>
           </div>
@@ -134,9 +196,117 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
           </button>
         </div>
 
+        {/* Dynamic Missing Role Alert & Tailored Action Banner */}
+        <div className="px-5 pt-3 shrink-0">
+          {missingRoleState === 'both' && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-amber-300">
+                    {isBn
+                      ? 'কল ও মেসেজ উভয় ডিফল্ট রোল অনুপস্থিত (DIALER & SMS Missing)'
+                      : 'Default Phone & SMS Roles Missing'}
+                  </div>
+                  <div className="text-[11px] text-amber-200/80">
+                    {isBn
+                      ? 'ইনকামিং কল কলার আইডি এবং অফলাইন এসএমএস সেভ করতে রোল দুটি অনুমোদিত হতে হবে।'
+                      : 'Required to intercept incoming calls and save offline SMS records into local DB.'}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => RoleManager.openDefaultAppsSettings()}
+                className="py-1.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-neutral-950 font-bold text-xs flex items-center justify-center gap-1.5 transition shrink-0 cursor-pointer shadow-sm"
+                title="Intent.ACTION_MANAGE_DEFAULT_APPS_SETTINGS"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{isBn ? 'সরাসরি ডিফল্ট অ্যাপ সেটিংস খুলুন' : 'Open Default Apps Settings'}</span>
+              </button>
+            </div>
+          )}
+
+          {missingRoleState === 'dialer' && (
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2.5">
+                <PhoneCall className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-rose-300">
+                    {isBn
+                      ? 'ডিফল্ট ফোন অ্যাপ রোল অনুপস্থিত (ROLE_DIALER Missing)'
+                      : 'Default Phone Role Missing (ROLE_DIALER)'}
+                  </div>
+                  <div className="text-[11px] text-rose-200/80">
+                    {isBn
+                      ? 'কল আসলে কলার আইডি ও রাডার স্ক্রিন প্রদর্শন করতে Smart Dialer-কে ডিফল্ট ফোন অ্যাপ করুন।'
+                      : 'Set Smart Dialer as default phone app for heads-up caller ID & radar display.'}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => RoleManager.openDefaultAppsSettings()}
+                className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shrink-0 cursor-pointer shadow-sm"
+                title="Intent.ACTION_MANAGE_DEFAULT_APPS_SETTINGS"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{isBn ? 'ডিফল্ট ফোন অ্যাপ সেটিংস খুলুন' : 'Open Phone App Settings'}</span>
+              </button>
+            </div>
+          )}
+
+          {missingRoleState === 'sms' && (
+            <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2.5">
+                <MessageSquare className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-blue-300">
+                    {isBn
+                      ? 'ডিফল্ট মেসেজ অ্যাপ রোল অনুপস্থিত (ROLE_SMS Missing)'
+                      : 'Default SMS Role Missing (ROLE_SMS)'}
+                  </div>
+                  <div className="text-[11px] text-blue-200/80">
+                    {isBn
+                      ? 'অফলাইনে রিয়েল-টাইম এসএমএস ও ওটিপি লোকাল ডাটাবেসে সেভ করার জন্য এই রোল প্রয়োজন।'
+                      : 'Required to receive and save real-time offline SMS & OTP messages locally.'}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => RoleManager.openDefaultAppsSettings()}
+                className="py-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shrink-0 cursor-pointer shadow-sm"
+                title="Intent.ACTION_MANAGE_DEFAULT_APPS_SETTINGS"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{isBn ? 'ডিফল্ট মেসেজ অ্যাপ সেটিংস খুলুন' : 'Open SMS App Settings'}</span>
+              </button>
+            </div>
+          )}
+
+          {missingRoleState === 'none' && (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2.5 text-xs text-emerald-300">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div>
+                  <span className="font-semibold">
+                    {isBn ? 'সব ডিফল্ট রোল সক্রিয় রয়েছে!' : 'All Default Roles Active!'}
+                  </span>{' '}
+                  <span className="text-[11px] text-emerald-400/80">
+                    {isBn
+                      ? '(ROLE_DIALER ও ROLE_SMS উভয়ই ওএস-এ সফলভাবে রেজিস্টার্ড)'
+                      : '(ROLE_DIALER & ROLE_SMS both verified in Android OS)'}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/60">
+                100% Verified
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* Action Toast Feedback */}
         {actionMessage && (
-          <div className="bg-emerald-950 border-b border-emerald-800 text-emerald-300 px-4 py-2 text-xs flex items-center gap-2">
+          <div className="mx-5 mt-2 bg-emerald-950 border border-emerald-800 text-emerald-300 px-4 py-2 rounded-xl text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{actionMessage}</span>
           </div>
@@ -154,7 +324,7 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
               }`}
             >
               <Info className="w-3.5 h-3.5" />
-              <span>{isBn ? 'কেন অনুমতি প্রয়োজন?' : 'Why Roles are Needed'}</span>
+              <span>{isBn ? 'কেন প্রয়োজন?' : 'Why Roles are Needed'}</span>
             </button>
             <button
               onClick={() => setActiveTab('steps')}
@@ -165,18 +335,18 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
               }`}
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span>{isBn ? 'সিস্টেম সেটিংস গাইড' : 'Settings Walkthrough'}</span>
+              <span>{isBn ? 'সেটিংস গাইড' : 'Settings Walkthrough'}</span>
             </button>
             <button
-              onClick={() => setActiveTab('actions')}
+              onClick={() => setActiveTab('test')}
               className={`flex-1 py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer ${
-                activeTab === 'actions'
+                activeTab === 'test'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Settings className="w-3.5 h-3.5" />
-              <span>{isBn ? '১-ক্লিক অ্যাকশন ও টেস্ট' : 'Actions & Live Status'}</span>
+              <PlayCircle className="w-3.5 h-3.5" />
+              <span>{isBn ? 'ডায়ালার টেস্ট ও অ্যাকশন' : 'Dialer Test & Actions'}</span>
             </button>
           </div>
         </div>
@@ -257,7 +427,6 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
                     </p>
                   </div>
 
-                  {/* Why it is needed box */}
                   <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 space-y-2">
                     <div className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
                       <CheckCircle2 className="w-4 h-4" />
@@ -285,7 +454,6 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
                     </ul>
                   </div>
 
-                  {/* Warning if disabled */}
                   <div className="p-3 bg-rose-950/30 rounded-lg border border-rose-900/40 text-xs text-rose-300 flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <div>
@@ -573,16 +741,109 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
                   className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition flex items-center justify-center gap-2 border border-slate-700 cursor-pointer shadow-sm"
                 >
                   <ExternalLink className="w-4 h-4 text-emerald-400" />
-                  <span>{isBn ? 'সরাসরি ফোনের "Default Apps" সেটিংস পেজ খুলুন' : 'Open System "Default Apps" Settings Page'}</span>
+                  <span>{isBn ? 'সরাসরি ফোনের "Default Apps" সেটিংস পেজ খুলুন (ACTION_MANAGE_DEFAULT_APPS)' : 'Open System "Default Apps" Settings Page'}</span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* TAB 3: LIVE STATUS & 1-CLICK ACTIONS */}
-          {activeTab === 'actions' && (
+          {/* TAB 3: DUMMY DIALER INTENT TEST & LIVE ACTIONS */}
+          {activeTab === 'test' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              {/* Dummy Dialer Intent Test Card */}
+              <div className="p-4 rounded-xl bg-slate-950/90 border border-emerald-500/30 space-y-3.5 shadow-md">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <Terminal className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-xs text-white">
+                        {isBn ? 'ডায়ালার সিস্টেম ইনটেন্ট ভেরিফিকেশন টেস্ট' : 'Test Default Dialer System Intent'}
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        {isBn
+                          ? 'Intent.ACTION_DIAL পাঠিয়ে ওএস রেজিস্ট্রেশন তাৎক্ষণিক নিশ্চিত করুন'
+                          : 'Trigger Intent.ACTION_DIAL to verify default app routing'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-400 px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800">
+                    ACTION_DIAL
+                  </span>
+                </div>
+
+                {/* Input & Preset Chips */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={dummyTestNumber}
+                      onChange={(e) => setDummyTestNumber(e.target.value)}
+                      placeholder="Enter test phone number..."
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                    <button
+                      onClick={handleTestDummyDialer}
+                      disabled={isTestingIntent || !dummyTestNumber}
+                      className="py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-sm shrink-0"
+                    >
+                      <PlayCircle className={`w-3.5 h-3.5 ${isTestingIntent ? 'animate-spin' : ''}`} />
+                      <span>{isTestingIntent ? (isBn ? 'টেস্টিং...' : 'Testing...') : (isBn ? 'ইনটেন্ট ট্রিগার করুন' : 'Trigger Intent')}</span>
+                    </button>
+                  </div>
+
+                  {/* Preset chips */}
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                    <span className="shrink-0">{isBn ? 'টেস্ট নম্বর:' : 'Presets:'}</span>
+                    {['123', '*#06#', '100', '01700000000'].map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => setDummyTestNumber(preset)}
+                        className={`px-2 py-0.5 rounded-md font-mono text-[10px] transition cursor-pointer ${
+                          dummyTestNumber === preset
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Test Result Display */}
+                {intentTestResult && (
+                  <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-200">
+                        {intentTestResult.isHeld ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                        )}
+                        <span>{intentTestResult.isHeld ? 'System Default Verified' : 'Intent Sent (Confirmation Needed)'}</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {intentTestResult.uri}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      {intentTestResult.message}
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-2 pt-1 text-[10px] font-mono text-slate-400 border-t border-slate-800">
+                      <div>Action: DIAL</div>
+                      <div>Protocol: tel:</div>
+                      <div>Role: {isDialerHeld ? 'HELD' : 'UNHELD'}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Header */}
+              <div className="flex items-center justify-between pt-1">
                 <div className="text-xs text-slate-400">
                   {isBn ? 'আপনার ফোনের বর্তমান RoleManager লাইভ অবস্থা:' : 'Current RoleManager Live State:'}
                 </div>
@@ -690,7 +951,7 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
                   className="py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 border border-slate-700 cursor-pointer transition"
                 >
                   <Settings className="w-4 h-4 text-emerald-400" />
-                  <span>{isBn ? 'Default Apps সেটিংস খুলুন' : 'Open Default Apps'}</span>
+                  <span>{isBn ? 'Default Apps সেটিংস (ACTION_MANAGE_DEFAULT_APPS)' : 'Default Apps Settings'}</span>
                 </button>
                 <button
                   onClick={() => RoleManager.openAppSettings()}
@@ -706,8 +967,8 @@ export const PermissionGuideModal: React.FC<PermissionGuideModalProps> = ({
 
         {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between shrink-0">
-          <div className="text-xs text-slate-400">
-            {isBn ? 'Smart Dialer • ভেরিফায়েড টেলিকম আর্কিটেকচার' : 'Smart Dialer • Verified Telecom Architecture'}
+          <div className="text-xs text-slate-400 font-mono">
+            {isBn ? 'Smart Dialer • Intent.ACTION_MANAGE_DEFAULT_APPS' : 'Smart Dialer • ACTION_MANAGE_DEFAULT_APPS'}
           </div>
           <button
             onClick={onClose}

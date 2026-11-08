@@ -26,6 +26,8 @@
   "exclude": [
     "prisma",
     "node_modules",
-    "dist"
+    "dist",
+    "android",
+    "asterisk*"
   ]
 }
